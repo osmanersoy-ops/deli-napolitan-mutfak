@@ -20,10 +20,10 @@ const ADISYO_HEADERS = {
   'Content-Type': 'application/json'
 };
 
-// Pizza filtreleme kelimeleri
-const PIZZA_KEYWORDS = (process.env.PIZZA_KEYWORDS || 'Pizza,Pizzalar,Napolitan,Calzone,Pizzetta')
+// Pizza filtreleme kelimeleri (Türkçe karakter uyumlu)
+const PIZZA_KEYWORDS = (process.env.PIZZA_KEYWORDS || 'Pizza,Pizzalar,PİZZALAR,pizzalar,Napolitan,Calzone,Pizzetta')
   .split(',')
-  .map(k => k.trim().toLowerCase());
+  .map(k => k.trim().toLocaleLowerCase('tr-TR'));
 
 // Bellekte tutulan aktif pizza siparişleri (Key: orderId)
 const activeOrdersMap = new Map();
@@ -32,11 +32,11 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 /**
- * Ürünün pizza olup olmadığını kontrol eder
+ * Ürünün pizza olup olmadığını kontrol eder (Türkçe karakter uyumlu)
  */
 function isPizzaProduct(product) {
-  const cat = (product.categoryName || '').toLowerCase();
-  const name = (product.productName || '').toLowerCase();
+  const cat = (product.categoryName || '').toLocaleLowerCase('tr-TR');
+  const name = (product.productName || '').toLocaleLowerCase('tr-TR');
   return PIZZA_KEYWORDS.some(keyword => cat.includes(keyword) || name.includes(keyword));
 }
 
