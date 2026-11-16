@@ -175,8 +175,23 @@ async function reconcileRecentOrders() {
 // Adisyo Panel > Webhooks kısmına bu URL verilir:
 // https://siparis.delinapolitan.com/api/adisyo/webhook
 // -------------------------------------------------------------
-app.post('/api/adisyo/webhook', async (req, res) => {
-  const payload = req.body;
+app.post('/api/adisyo/webhook', express.text({ type: '*/*' }), async (req, res) => {
+  // Adisyo URL doğrulama el sıkışması kontrolü: Adisyo "adisyo" metni gönderir ve "adisyo" yanıtı bekler
+  if (typeof req.body === 'string' && req.body.trim() === 'adisyo') {
+    console.log('[Webhook Doğrulama] Adisyo servis URL doğrulama isteği başarıyla yanıtlandı.');
+    return res.status(200).send('adisyo');
+  }
+
+  let payload = req.body;
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch (e) {
+      // JSON değilse ve bilinmeyen bir metinse
+      return res.status(200).send('ok');
+    }
+  }
+
   const eventType = payload?.webhookEventType;
   const orderId = payload?.data?.id;
 
