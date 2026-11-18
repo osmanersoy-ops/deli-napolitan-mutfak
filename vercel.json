@@ -5,7 +5,6 @@
   "rewrites": [
     { "source": "/mutfak", "destination": "/mutfak.html" },
     { "source": "/servis", "destination": "/servis.html" },
-    { "source": "/", "destination": "/index.html" },
     { "source": "/api/products/toggle-ready", "destination": "/api/toggle-ready" },
     { "source": "/api/orders/mark-all-ready", "destination": "/api/mark-all-ready" },
     { "source": "/api/orders/notify-adisyo", "destination": "/api/notify-adisyo" },

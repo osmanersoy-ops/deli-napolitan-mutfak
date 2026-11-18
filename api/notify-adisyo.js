@@ -1,6 +1,6 @@
-const { markOrderPreparedInAdisyo } = require('./_lib/store');
+import { markOrderPreparedInAdisyo } from './_lib/store.js';
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -24,4 +24,4 @@ module.exports = async (req, res) => {
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
-};
+}

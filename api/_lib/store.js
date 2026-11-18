@@ -15,8 +15,8 @@ const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
 // Local container memory fallback
-let memoryActiveOrders = {};
-let memoryReadyProductIds = new Set();
+export const memoryActiveOrders = {};
+export const memoryReadyProductIds = new Set();
 let memoryLastSyncTime = null;
 let memoryLastSyncStatus = 'Başlatılıyor...';
 let memoryLastFetchTimestamp = 0;
@@ -24,7 +24,7 @@ let memoryLastFetchTimestamp = 0;
 /**
  * Turkish lowercase normalization
  */
-function normalizeTurkish(text) {
+export function normalizeTurkish(text) {
   if (!text) return '';
   return text
     .replace(/İ/g, 'i')
@@ -39,7 +39,7 @@ function normalizeTurkish(text) {
 /**
  * Check if product is a pizza
  */
-function isPizzaProduct(p) {
+export function isPizzaProduct(p) {
   const cat = normalizeTurkish(p.categoryName || '');
   const name = normalizeTurkish(p.productName || '');
   return PIZZA_KEYWORDS.some(k => cat.includes(k) || name.includes(k));
@@ -71,7 +71,7 @@ async function kvCommand(endpoint, body = null) {
 /**
  * Get ready product IDs set
  */
-async function getReadyProductIds() {
+export async function getReadyProductIds() {
   if (KV_URL && KV_TOKEN) {
     const members = await kvCommand('smembers/kds_ready_products');
     if (Array.isArray(members)) {
@@ -84,7 +84,7 @@ async function getReadyProductIds() {
 /**
  * Toggle ready state of a product
  */
-async function toggleProductReady(productId) {
+export async function toggleProductReady(productId) {
   const pid = String(productId);
   let isReady = false;
 
@@ -113,7 +113,7 @@ async function toggleProductReady(productId) {
 /**
  * Mark all products in an order ready
  */
-async function markAllProductsReady(orderId, productIds = []) {
+export async function markAllProductsReady(orderId, productIds = []) {
   if (KV_URL && KV_TOKEN && productIds.length > 0) {
     for (const pid of productIds) {
       await kvCommand(`sadd/kds_ready_products/${encodeURIComponent(String(pid))}`);
@@ -128,7 +128,7 @@ async function markAllProductsReady(orderId, productIds = []) {
 /**
  * Mark order as Prepared in Adisyo POS
  */
-async function markOrderPreparedInAdisyo(orderId) {
+export async function markOrderPreparedInAdisyo(orderId) {
   if (!orderId) return { success: false, message: 'Eksik orderId' };
 
   const oid = Number(orderId);
@@ -167,7 +167,7 @@ async function markOrderPreparedInAdisyo(orderId) {
 /**
  * Format raw order for KDS & Service displays
  */
-function formatOrder(order, readySet) {
+export function formatOrder(order, readySet) {
   if (!order || !Array.isArray(order.products)) return null;
 
   const statusStr = normalizeTurkish(order.status || '');
@@ -275,7 +275,7 @@ function formatOrder(order, readySet) {
 /**
  * Fetch orders from Adisyo with 15-20s rate limit guard
  */
-async function getOrders(forceSync = false) {
+export async function getOrders(forceSync = false) {
   const now = Date.now();
   const timeSinceLastFetch = (now - memoryLastFetchTimestamp) / 1000;
 
@@ -374,11 +374,3 @@ async function getOrders(forceSync = false) {
     cached: false
   };
 }
-
-module.exports = {
-  getOrders,
-  toggleProductReady,
-  markAllProductsReady,
-  markOrderPreparedInAdisyo,
-  memoryActiveOrders
-};

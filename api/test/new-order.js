@@ -1,6 +1,6 @@
-const { memoryActiveOrders } = require('../_lib/store');
+import { memoryActiveOrders } from '../_lib/store.js';
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -59,4 +59,4 @@ module.exports = async (req, res) => {
 
   memoryActiveOrders[mockId] = mockOrder;
   return res.status(200).json({ success: true, order: mockOrder });
-};
+}

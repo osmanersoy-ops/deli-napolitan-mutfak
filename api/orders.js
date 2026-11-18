@@ -1,6 +1,6 @@
-const { getOrders } = require('./_lib/store');
+import { getOrders } from './_lib/store.js';
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -9,7 +9,6 @@ module.exports = async (req, res) => {
     return res.status(200).end();
   }
 
-  // Edge CDN Caching: Caches at Vercel Edge for 12s, preventing Adisyo 30s rate limits
   res.setHeader('Cache-Control', 's-maxage=12, stale-while-revalidate=25');
 
   try {
@@ -18,4 +17,4 @@ module.exports = async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: err.message, orders: [] });
   }
-};
+}

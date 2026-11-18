@@ -2,8 +2,8 @@
   "name": "deli-napolitan-mutfak",
   "version": "1.0.0",
   "description": "Deli Napolitan Adisyo POS Entegre Mutfak (KDS) ve Servis Ekranı",
-  "private": true,
+  "type": "module",
   "scripts": {
-    "start": "python3 kds_server.py"
+    "start": "node -e \"console.log('Vercel projesi hazır.')\""
   }
 }

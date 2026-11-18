@@ -1,1 +1,1 @@
-module.exports = require('../toggle-ready');
+export { default } from '../toggle-ready.js';

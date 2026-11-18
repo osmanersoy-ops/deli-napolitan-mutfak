@@ -1,1 +1,1 @@
-module.exports = require('../notify-adisyo');
+export { default } from '../notify-adisyo.js';

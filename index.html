@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deli Napolitan - Ekran Seçimi</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse-slow {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.02); opacity: 0.95; }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased flex flex-col justify-between selection:bg-rose-500 selection:text-white">
+
+  <!-- TOP HEADER -->
+  <header class="px-6 py-5 border-b border-slate-800 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="text-3xl">🍕</span>
+      <div>
+        <h1 class="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+          DELI NAPOLITAN
+        </h1>
+        <p class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Adisyo POS Entegre Operasyon Paneli</p>
+      </div>
+    </div>
+
+    <!-- Live Status Indicator -->
+    <div id="live-indicator" class="flex items-center gap-2.5 bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs font-bold text-slate-300">
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span id="sync-text">Adisyo Bağlantısı Kontrol Ediliyor...</span>
+    </div>
+  </header>
+
+  <!-- MAIN SELECTION AREA (2 BIG BUTTONS) -->
+  <main class="flex-1 max-w-5xl mx-auto w-full px-6 py-12 flex flex-col justify-center items-center">
+    
+    <div class="text-center mb-10">
+      <span class="text-xs font-extrabold uppercase tracking-widest text-rose-500 bg-rose-500/10 px-3.5 py-1.5 rounded-full border border-rose-500/20">
+        İstasyon Seçimi
+      </span>
+      <h2 class="text-3xl md:text-4xl font-black text-white mt-3 tracking-tight">
+        Hangi Ekranı Kullanmak İstiyorsunuz?
+      </h2>
+      <p class="text-sm md:text-base text-slate-400 mt-2 max-w-xl mx-auto">
+        Kullanacağınız cihaza göre ilgili ekranı seçin. Bu seçimi istediğiniz an değiştirebilirsiniz.
+      </p>
+    </div>
+
+    <!-- 2 LARGE CARDS / BUTTONS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
+      
+      <!-- CARD 1: MUTFAK EKRANI -->
+      <a href="/mutfak" class="group relative flex flex-col justify-between bg-slate-900 hover:bg-slate-850 border-2 border-slate-800 hover:border-rose-500 rounded-3xl p-8 md:p-10 transition-all duration-300 hover:shadow-2xl hover:shadow-rose-950/50 hover:-translate-y-1 text-left">
+        <div>
+          <div class="flex items-center justify-between mb-6">
+            <div class="w-16 h-16 rounded-2xl bg-rose-600/15 border border-rose-500/30 flex items-center justify-center text-4xl group-hover:scale-110 transition-transform">
+              🍕
+            </div>
+            <span class="text-xs font-black uppercase tracking-wider bg-rose-950 text-rose-300 border border-rose-800/60 px-3 py-1 rounded-full">
+              Fırın Ekranı (KDS)
+            </span>
+          </div>
+
+          <h3 class="text-3xl font-black text-white group-hover:text-rose-400 transition-colors">
+            Mutfak
+          </h3>
+          <p class="text-sm text-slate-400 mt-2 leading-relaxed">
+            Fırın ve mutfak personeli için özel tasarım. Yalnızca pizza siparişleri akar.
+          </p>
+
+          <ul class="mt-6 space-y-2.5 text-xs text-slate-300 font-medium border-t border-slate-800/80 pt-5">
+            <li class="flex items-center gap-2">
+              <span class="text-rose-500 font-bold">✓</span> Yalnızca pizza çeşitleri (içecek vb. gizlenir)
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="text-rose-500 font-bold">✓</span> <strong class="text-white">Pasif / Dokunmasız:</strong> Otomatik akar
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="text-rose-500 font-bold">✓</span> Canlı dakika/saniye sayaçları
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="text-rose-500 font-bold">✓</span> Serviste "Hazır" basılan pizza üstü çizili görünür
+            </li>
+          </ul>
+        </div>
+
+        <div class="mt-8 pt-4">
+          <div class="w-full py-4 bg-rose-600 group-hover:bg-rose-500 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 transition shadow-lg shadow-rose-900/40">
+            <span>Mutfak Ekranını Aç</span>
+            <span class="group-hover:translate-x-1 transition-transform">→</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- CARD 2: SERVİS EKRANI -->
+      <a href="/servis" class="group relative flex flex-col justify-between bg-slate-900 hover:bg-slate-850 border-2 border-slate-800 hover:border-amber-500 rounded-3xl p-8 md:p-10 transition-all duration-300 hover:shadow-2xl hover:shadow-amber-950/50 hover:-translate-y-1 text-left">
+        <div>
+          <div class="flex items-center justify-between mb-6">
+            <div class="w-16 h-16 rounded-2xl bg-amber-600/15 border border-amber-500/30 flex items-center justify-center text-4xl group-hover:scale-110 transition-transform">
+              🛎️
+            </div>
+            <span class="text-xs font-black uppercase tracking-wider bg-amber-950 text-amber-300 border border-amber-800/60 px-3 py-1 rounded-full">
+              Expo & Salon
+            </span>
+          </div>
+
+          <h3 class="text-3xl font-black text-white group-hover:text-amber-400 transition-colors">
+            Servis
+          </h3>
+          <p class="text-sm text-slate-400 mt-2 leading-relaxed">
+            Servis, expo ve salon personeli için tam adisyon ekranı.
+          </p>
+
+          <ul class="mt-6 space-y-2.5 text-xs text-slate-300 font-medium border-t border-slate-800/80 pt-5">
+            <li class="flex items-center gap-2">
+              <span class="text-amber-500 font-bold">✓</span> <strong class="text-white">Tüm Ürünler:</strong> Pizza, İçecek, Salata, Tatlı
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="text-amber-500 font-bold">✓</span> Ürünlerin yanında <strong class="text-white">"Hazır"</strong> butonu
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="text-amber-500 font-bold">✓</span> Hazır basılınca ürünün üstü çizilir
+            </li>
+            <li class="flex items-center gap-2">
+              <span class="text-amber-500 font-bold">✓</span> Mutfak ekranıyla anlık senkronizedir
+            </li>
+          </ul>
+        </div>
+
+        <div class="mt-8 pt-4">
+          <div class="w-full py-4 bg-amber-600 group-hover:bg-amber-500 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 transition shadow-lg shadow-amber-900/40">
+            <span>Servis Ekranını Aç</span>
+            <span class="group-hover:translate-x-1 transition-transform">→</span>
+          </div>
+        </div>
+      </a>
+
+    </div>
+
+  </main>
+
+  <!-- FOOTER: LOCAL NETWORK ADDRESSES -->
+  <footer class="px-6 py-4 border-t border-slate-800/80 bg-slate-950/80 text-xs text-slate-400 flex flex-col md:flex-row items-center justify-between gap-3">
+    <div>
+      <span class="font-bold text-slate-300">Deli Napolitan KDS Sistemi</span> &bull; 
+      <span>Yerel Ağ IP: <code class="bg-slate-900 px-2 py-0.5 rounded text-amber-400 font-mono font-bold">192.168.1.106:3001</code></span>
+    </div>
+    <div class="flex items-center gap-4 text-slate-400">
+      <a href="/mutfak" class="hover:text-rose-400 transition font-semibold">🍕 /mutfak</a>
+      <span>&bull;</span>
+      <a href="/servis" class="hover:text-amber-400 transition font-semibold">🛎️ /servis</a>
+    </div>
+  </footer>
+
+  <script>
+    // Canlı durum kontrolü
+    async function checkStatus() {
+      try {
+        const res = await fetch('/api/orders');
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('sync-text').textContent = `Adisyo Canlı (${data.count} Aktif Adisyon)`;
+        }
+      } catch (e) {
+        document.getElementById('sync-text').textContent = 'Sunucuya Bağlanılamadı';
+      }
+    }
+    checkStatus();
+    setInterval(checkStatus, 5000);
+  </script>
+</body>
+</html>
