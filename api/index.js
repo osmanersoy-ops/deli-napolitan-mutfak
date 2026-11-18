@@ -15,19 +15,28 @@ let lastSyncStatus = 'Başlatılıyor...';
 let readyProductIds = new Set();
 let isFetching = false;
 
-// Optional file persistence in /tmp
+// File persistence in /tmp
 const STATE_FILE = '/tmp/kds_state.json';
 
 function tryLoadState() {
-  if (cachedOrders.length > 0) return;
   try {
     if (fs.existsSync(STATE_FILE)) {
       const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-      if (Array.isArray(data.cachedOrders)) cachedOrders = data.cachedOrders;
-      if (typeof data.lastFetchTime === 'number') lastFetchTime = data.lastFetchTime;
-      if (data.lastSyncTimeString) lastSyncTimeString = data.lastSyncTimeString;
-      if (data.lastSyncStatus) lastSyncStatus = data.lastSyncStatus;
-      if (Array.isArray(data.readyProductIds)) readyProductIds = new Set(data.readyProductIds);
+      if (Array.isArray(data.cachedOrders) && cachedOrders.length === 0) {
+        cachedOrders = data.cachedOrders;
+      }
+      if (typeof data.lastFetchTime === 'number' && data.lastFetchTime > lastFetchTime) {
+        lastFetchTime = data.lastFetchTime;
+      }
+      if (data.lastSyncTimeString && !lastSyncTimeString) {
+        lastSyncTimeString = data.lastSyncTimeString;
+      }
+      if (data.lastSyncStatus && lastSyncStatus === 'Başlatılıyor...') {
+        lastSyncStatus = data.lastSyncStatus;
+      }
+      if (Array.isArray(data.readyProductIds)) {
+        data.readyProductIds.forEach(id => readyProductIds.add(id));
+      }
     }
   } catch (e) {}
 }
@@ -179,13 +188,14 @@ async function fetchFromAdisyo(force = false) {
   tryLoadState();
   const now = Date.now();
 
-  // Adisyo 30 saniye kuralı: En az 29 saniye geçmeli
-  if (!force && now - lastFetchTime < 29000 && cachedOrders.length > 0) {
+  // KESİN ADİSYO KURALI: En az 30 saniye geçmeden ASLA istek atılmaz!
+  if (!force && now - lastFetchTime < 30000) {
     return cachedOrders;
   }
 
   if (isFetching) return cachedOrders;
   isFetching = true;
+  lastFetchTime = Date.now(); // Mutex kilidi: sonraki istekleri hemen beklemeye al
 
   const url = `${ADISYO_BASE_URL}/RecentOrders?orderType=TakeAway,Table,Retail&onlyRestaurantCourier=false`;
   try {
@@ -218,7 +228,7 @@ async function fetchFromAdisyo(force = false) {
       lastSyncStatus = 'Canlı Bağlı';
       trySaveState();
     } else if (text.includes('601')) {
-      // 601 Adisyo kota uyarısı: Son çekim zamanını şimdi yap ki en az 30s beklesin
+      // 601 Kota uyarısı: Sayacı sıfırla ki en az 30s beklesin
       lastFetchTime = Date.now();
       lastSyncStatus = 'Adisyo kota koruması (30s)';
       trySaveState();
@@ -241,8 +251,9 @@ function getOrdersPayload() {
   return {
     orders: formatted,
     count: formatted.length,
+    rawCount: cachedOrders.length,
     lastSyncTime: lastSyncTimeString || 'Canlı',
-    status: `Bağlı (${formatted.length} bekleyen adisyon)`
+    status: lastSyncStatus
   };
 }
 
@@ -290,6 +301,7 @@ module.exports = async function handler(req, res) {
         } catch (e) {
           lastSyncTimeString = new Date().toLocaleTimeString('tr-TR');
         }
+        lastSyncStatus = 'Webhook Anlık Bağlı';
         trySaveState();
       } else {
         await fetchFromAdisyo(false);
@@ -352,9 +364,9 @@ module.exports = async function handler(req, res) {
   }
 
   // 5. DEFAULT: ORDERS LIST (/api/orders)
-  res.setHeader('Cache-Control', 'public, s-maxage=5, stale-while-revalidate=15');
+  res.setHeader('Cache-Control', 'public, s-maxage=3, stale-while-revalidate=10');
   const now = Date.now();
-  if (now - lastFetchTime >= 29000 || cachedOrders.length === 0) {
+  if (now - lastFetchTime >= 30000) {
     await fetchFromAdisyo(false);
   }
 
