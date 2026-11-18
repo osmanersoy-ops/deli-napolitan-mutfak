@@ -386,9 +386,9 @@
       }
     }
 
-    // İlk yükleme ve periyodik sorgulama (Her 2.5 saniyede bir)
+    // İlk yükleme ve periyodik sorgulama (Her 3.5 saniyede bir)
     syncOrders();
-    setInterval(syncOrders, 2500);
+    setInterval(syncOrders, 3500);
 
     // Manuel Senkronizasyon Butonu
     async function manualSync() {

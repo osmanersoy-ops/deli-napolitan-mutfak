@@ -11,6 +11,7 @@ let lastFetchTime = 0;
 let lastSyncTimeString = null;
 let lastSyncStatus = 'Başlatılıyor...';
 let readyProductIds = new Set();
+let inFlightPromise = null;
 
 function normalizeTurkish(text) {
   if (!text) return '';
@@ -36,7 +37,17 @@ function formatOrder(order) {
   const statusStr = normalizeTurkish(order.status || '');
   const statusId = order.statusId || 0;
 
-  if (statusId === 3 || statusId === 5 || statusStr.includes('hazır') || statusStr.includes('kapan') || statusStr.includes('iptal')) {
+  // Hazırlandı (3), Kapandı (5), İptal veya preparedDate varsa mutfak ve servisten düşer
+  const isFinished = (
+    order.preparedDate != null ||
+    statusId === 3 ||
+    statusId === 5 ||
+    statusStr.includes('hazır') ||
+    statusStr.includes('kapan') ||
+    statusStr.includes('iptal')
+  );
+
+  if (isFinished) {
     return null;
   }
 
@@ -129,6 +140,48 @@ function formatOrder(order) {
   };
 }
 
+async function fetchFromAdisyo() {
+  const url = `${ADISYO_BASE_URL}/RecentOrders?orderType=TakeAway,Table,Retail&onlyRestaurantCourier=false`;
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'x-api-key': ADISYO_API_KEY,
+        'x-api-secret': ADISYO_API_SECRET,
+        'x-api-consumer': ADISYO_API_CONSUMER,
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Deli-Napolitan-KDS)'
+      }
+    });
+    const text = await response.text();
+    let data = {};
+    try { data = JSON.parse(text); } catch (e) {}
+
+    if (response.ok && Array.isArray(data.data)) {
+      cachedOrders = data.data;
+      lastFetchTime = Date.now();
+      try {
+        lastSyncTimeString = new Intl.DateTimeFormat('tr-TR', {
+          timeZone: 'Europe/Istanbul',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        }).format(new Date());
+      } catch (e) {
+        lastSyncTimeString = new Date().toLocaleTimeString('tr-TR');
+      }
+      lastSyncStatus = 'Canlı Bağlı';
+    } else if (text.includes('601')) {
+      // Adisyo kota koruması: en az 25 sn daha bekle
+      lastFetchTime = Date.now() - 5000;
+      lastSyncStatus = 'Adisyo kota koruması (30s)';
+    }
+  } catch (err) {
+    console.error('[Adisyo Fetch Error]', err);
+  } finally {
+    inFlightPromise = null;
+  }
+}
+
 async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -138,36 +191,18 @@ async function handler(req, res) {
     return res.status(200).end();
   }
 
-  res.setHeader('Cache-Control', 's-maxage=12, stale-while-revalidate=25');
+  // Edge cache: 15s cache, 30s stale
+  res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
 
   const now = Date.now();
-  if (now - lastFetchTime > 16000 || cachedOrders.length === 0) {
-    try {
-      const url = `${ADISYO_BASE_URL}/RecentOrders?orderType=TakeAway,Table,Retail&onlyRestaurantCourier=false`;
-      const response = await fetch(url, {
-        headers: {
-          'x-api-key': ADISYO_API_KEY,
-          'x-api-secret': ADISYO_API_SECRET,
-          'x-api-consumer': ADISYO_API_CONSUMER,
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Deli-Napolitan-KDS)'
-        }
-      });
-      const text = await response.text();
-      let data = {};
-      try { data = JSON.parse(text); } catch (e) {}
-
-      if (response.ok && data.data) {
-        cachedOrders = data.data;
-        lastFetchTime = now;
-        const d = new Date();
-        lastSyncTimeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
-        lastSyncStatus = `Bağlı (${cachedOrders.length} aktif adisyon)`;
-      } else if (text.includes('601')) {
-        lastSyncStatus = 'Adisyo kota koruması aktif';
-      }
-    } catch (err) {
-      console.error('[Adisyo Error]', err);
+  // Adisyo 30 sn kota kuralı: en az 28 saniye geçmeli
+  if (now - lastFetchTime > 28000 || cachedOrders.length === 0) {
+    if (!inFlightPromise) {
+      inFlightPromise = fetchFromAdisyo();
+    }
+    // İlk yüklemede Adisyo yanıtını bekle
+    if (cachedOrders.length === 0) {
+      await inFlightPromise;
     }
   }
 
@@ -180,7 +215,7 @@ async function handler(req, res) {
     orders: formatted,
     count: formatted.length,
     lastSyncTime: lastSyncTimeString || 'Canlı',
-    status: lastSyncStatus
+    status: `Bağlı (${formatted.length} bekleyen adisyon)`
   });
 }
 
