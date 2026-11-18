@@ -1,4 +1,5 @@
-const { fetchFromAdisyo, updateCachedOrder } = require('./orders.js');
+const { loadState, saveState } = require('./state.js');
+const { fetchFromAdisyo } = require('./orders.js');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -25,12 +26,32 @@ module.exports = async (req, res) => {
   // Incoming webhook event from Adisyo (order created / updated)
   try {
     const payload = req.body;
-    console.log('[Adisyo Webhook Event]', typeof payload === 'object' ? JSON.stringify(payload).slice(0, 300) : payload);
-
     const incomingOrder = payload?.data || (payload?.id && payload?.products ? payload : null);
+
     if (incomingOrder && incomingOrder.id) {
-      updateCachedOrder(incomingOrder);
-      console.log('[Webhook Fast Order Updated]', incomingOrder.id, incomingOrder.tableName);
+      const state = loadState();
+      const existingIdx = state.cachedOrders.findIndex(o => o.id === incomingOrder.id);
+      if (existingIdx >= 0) {
+        state.cachedOrders[existingIdx] = incomingOrder;
+      } else {
+        state.cachedOrders.push(incomingOrder);
+      }
+      let timeStr;
+      try {
+        timeStr = new Intl.DateTimeFormat('tr-TR', {
+          timeZone: 'Europe/Istanbul',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        }).format(new Date());
+      } catch (e) {
+        timeStr = new Date().toLocaleTimeString('tr-TR');
+      }
+      saveState({
+        cachedOrders: state.cachedOrders,
+        lastSyncTimeString: timeStr,
+        lastSyncStatus: 'Webhook Anlık Bağlı'
+      });
     } else {
       await fetchFromAdisyo(false);
     }

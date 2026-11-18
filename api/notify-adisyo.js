@@ -1,3 +1,5 @@
+const { loadState, saveState } = require('./state.js');
+
 const ADISYO_BASE_URL = process.env.ADISYO_BASE_URL || 'https://ext.adisyo.com/api/External/v2';
 const ADISYO_API_KEY = process.env.ADISYO_API_KEY || '25b80b3556ca3a15353dd2fd312062fad27adcf5a1de51b75bdadea1fa8214ab';
 const ADISYO_API_SECRET = process.env.ADISYO_API_SECRET || '65e70574-2b17-42a1-b093-4128ad9aff44';
@@ -13,8 +15,8 @@ module.exports = async (req, res) => {
   const { orderId } = req.body || {};
   if (!orderId) return res.status(400).json({ error: 'Eksik orderId' });
 
+  const oid = Number(orderId);
   try {
-    const oid = Number(orderId);
     if (oid && oid < 1000000000000) {
       await fetch(`${ADISYO_BASE_URL}/Prepared`, {
         method: 'POST',
@@ -28,8 +30,14 @@ module.exports = async (req, res) => {
         body: JSON.stringify({ orderId: oid })
       });
     }
-    return res.status(200).json({ success: true, orderId });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    console.error('[Adisyo Prepared Error]', err);
   }
+
+  // Önbellekten kaldır
+  const state = loadState();
+  const updatedOrders = state.cachedOrders.filter(o => o.id !== oid);
+  saveState({ cachedOrders: updatedOrders });
+
+  return res.status(200).json({ success: true, orderId: oid });
 };

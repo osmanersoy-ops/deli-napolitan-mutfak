@@ -203,7 +203,7 @@
           const allReady = order.products.every(p => p.isReady);
           if (allReady) {
             dropCompletedServisOrder(orderId);
-            fetch('/api/orders/notify-adisyo', {
+            fetch('/api/notify-adisyo', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ orderId: orderId })
@@ -218,7 +218,7 @@
 
       // Sunucuya bildir (Mutfak ekranına da anında yansır)
       try {
-        await fetch('/api/products/toggle-ready', {
+        await fetch('/api/toggle-ready', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId: orderId, productId: productId })
@@ -237,7 +237,7 @@
       }
 
       try {
-        await fetch('/api/orders/mark-all-ready', {
+        await fetch('/api/mark-all-ready', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId: orderId })

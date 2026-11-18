@@ -11,6 +11,6 @@ module.exports = async (req, res) => {
     await fetchFromAdisyo(true);
     return res.status(200).json(getOrdersPayload());
   } catch (e) {
-    return res.status(200).json({ success: true });
+    return res.status(200).json(getOrdersPayload());
   }
 };
