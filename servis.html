@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deli Napolitan - Servis & Expo Ekranı</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse-urgent {
+      0%, 100% { border-color: #ef4444; background-color: #fef2f2; }
+      50% { border-color: #dc2626; background-color: #fee2e2; }
+    }
+    .card-urgent {
+      animation: pulse-urgent 2s infinite ease-in-out;
+    }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(-16px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .order-enter {
+      animation: slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .order-exit {
+      transform: scale(0.92) translateY(24px);
+      opacity: 0;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    ::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-[#f8fafc] text-slate-800 min-h-screen font-sans antialiased select-none flex flex-col">
+
+  <!-- TOP BAR: Marka, Canlı Durum ve Kontroller -->
+  <header class="px-6 py-3 flex items-center justify-between sticky top-0 z-30 bg-slate-900 text-white shadow-md">
+    <div class="flex items-center gap-3">
+      <a href="/" title="Ana Sayfaya Dön" class="text-xl font-black text-amber-500 hover:text-amber-400 transition flex items-center gap-2 tracking-tight">
+        <span>🛎️</span> DELI NAPOLITAN
+      </a>
+      <span class="text-xs font-bold text-slate-300 uppercase tracking-wider bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700">
+        Servis & Expo Ekranı
+      </span>
+      <div class="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/50 px-3 py-1 rounded-full text-emerald-400 text-xs font-bold shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="sync-status">Adisyo Canlı Bağlantı</span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2.5">
+      <!-- Tamamlananları Göster / Gizle Butonu -->
+      <button onclick="toggleShowCompleted()" id="completed-toggle-btn" class="hidden items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-emerald-400 text-xs font-bold transition active:scale-95">
+        <span>✓</span>
+        <span id="completed-toggle-text">Tamamlananlar (0)</span>
+      </button>
+
+      <a href="/mutfak" title="Mutfak Ekranına Geç" class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition active:scale-95 shadow">
+        <span>🍕</span>
+        <span>Mutfak Ekranı</span>
+      </a>
+      <a href="/" title="Ekran Seçim Paneli" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 text-xs font-bold transition active:scale-95">
+        <span>←</span>
+        <span>Giriş</span>
+      </a>
+      <button onclick="manualSync()" title="Şimdi Senkronize Et" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 text-xs font-bold transition active:scale-95">
+        <span>🔄</span>
+        <span>Yenile</span>
+      </button>
+      <button onclick="toggleSound()" id="sound-btn" title="Sesli Bildirim" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 text-xs font-bold transition active:scale-95">
+        <span id="sound-icon">🔔</span>
+        <span id="sound-text">Ses Açık</span>
+      </button>
+      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 rounded-lg text-white text-xs font-bold transition active:scale-95 shadow">
+        <span>⛶</span>
+        <span>Tam Ekran</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN KDS GRID (Landscape Tablet / Touch Expo Display) -->
+  <main class="flex-1 px-6 py-6 overflow-y-auto">
+    <div id="orders-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 items-start">
+      <!-- Adisyon kartları tüm ürünleriyle buraya basılır -->
+    </div>
+
+    <!-- Boş Durum -->
+    <div id="empty-state" class="hidden text-center py-36">
+      <div class="text-7xl mb-3">🛎️</div>
+      <h3 class="text-2xl font-black text-slate-800">Bekleyen Servis Adisyonu Yok</h3>
+      <p class="text-sm text-slate-500 mt-1">Adisyo'dan sipariş girildiğinde buraya otomatik düşecektir.</p>
+    </div>
+  </main>
+
+  <script>
+    let soundEnabled = true;
+    let audioCtx = null;
+    let orders = [];
+    let previousOrderIds = new Set();
+    let isFirstLoad = true;
+
+    // Serviste tüm ürünleri hazır basılıp ekrandan düşürülen adisyonlar
+    const dismissedServisOrders = new Set();
+    const droppingAnimationOrders = new Set();
+    let showCompleted = false;
+
+    // Web Audio Servis Zili
+    function playKitchenChime() {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const now = audioCtx.currentTime;
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(880, now);
+        osc1.frequency.exponentialRampToValueAtTime(1174.66, now + 0.1);
+        gain1.gain.setValueAtTime(0.35, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.6);
+      } catch (e) {
+        console.log("Audio notice:", e);
+      }
+    }
+
+    function formatTime(totalSeconds) {
+      const m = Math.floor(totalSeconds / 60);
+      const s = totalSeconds % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    // Kategoriye göre simge ve stil belirleme
+    function getCategoryBadge(catName, isPizza) {
+      const c = (catName || '').toLowerCase();
+      if (isPizza || c.includes('pizza')) {
+        return { icon: '🍕', label: 'Pizza', badgeClass: 'bg-rose-100 text-rose-800 border-rose-200' };
+      }
+      if (c.includes('içecek') || c.includes('icecek') || c.includes('kola') || c.includes('su') || c.includes('kahve') || c.includes('bira')) {
+        return { icon: '🥤', label: 'İçecek', badgeClass: 'bg-sky-100 text-sky-800 border-sky-200' };
+      }
+      if (c.includes('salata')) {
+        return { icon: '🥗', label: 'Salata', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+      }
+      if (c.includes('tatlı') || c.includes('tatli')) {
+        return { icon: '🍰', label: 'Tatlı', badgeClass: 'bg-purple-100 text-purple-800 border-purple-200' };
+      }
+      if (c.includes('çorba') || c.includes('corba')) {
+        return { icon: '🥣', label: 'Çorba', badgeClass: 'bg-amber-100 text-amber-800 border-amber-200' };
+      }
+      return { icon: '🍽️', label: catName || 'Genel', badgeClass: 'bg-slate-100 text-slate-700 border-slate-200' };
+    }
+
+    // Tamamlanan siparişi animasyonla Servis ekranından düşür
+    function dropCompletedServisOrder(orderId) {
+      if (droppingAnimationOrders.has(orderId)) return;
+      droppingAnimationOrders.add(orderId);
+
+      const card = document.getElementById(`card-${orderId}`);
+      if (card) {
+        card.classList.remove('card-urgent');
+        card.classList.add('bg-emerald-50', 'border-emerald-500');
+        card.innerHTML = `
+          <div class="p-8 text-center flex flex-col items-center justify-center my-auto">
+            <div class="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center text-3xl font-black mb-3 shadow-md animate-bounce">✓</div>
+            <div class="text-xl font-black text-emerald-950">Tüm Sipariş Hazırlandı!</div>
+            <div class="text-xs font-bold text-emerald-700 mt-1">Servise Çıktı &bull; Ekrandan Kaldırılıyor</div>
+          </div>
+        `;
+
+        setTimeout(() => {
+          card.classList.add('order-exit');
+          setTimeout(() => {
+            dismissedServisOrders.add(orderId);
+            droppingAnimationOrders.delete(orderId);
+            renderOrders();
+          }, 350);
+        }, 1100);
+      } else {
+        dismissedServisOrders.add(orderId);
+        droppingAnimationOrders.delete(orderId);
+        renderOrders();
+      }
+    }
+
+    // Ürün Hazır Butonuna Tıklandığında
+    async function toggleProductReady(orderId, productId) {
+      const order = orders.find(o => o.id === orderId);
+      if (order) {
+        const prod = order.products.find(p => String(p.id) === String(productId));
+        if (prod) {
+          prod.isReady = !prod.isReady;
+
+          // Eğer tüm ürünler hazırlandıysa otomatik düşür ve Adisyo'ya bildir
+          const allReady = order.products.every(p => p.isReady);
+          if (allReady) {
+            dropCompletedServisOrder(orderId);
+            fetch('/api/orders/notify-adisyo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderId: orderId })
+            }).catch(() => {});
+          } else {
+            // Eğer daha önce düşürüldüyse ama bir ürün geri alındıysa ekranına geri getir
+            dismissedServisOrders.delete(orderId);
+            renderOrders();
+          }
+        }
+      }
+
+      // Sunucuya bildir (Mutfak ekranına da anında yansır)
+      try {
+        await fetch('/api/products/toggle-ready', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: orderId, productId: productId })
+        });
+      } catch (e) {
+        console.error("Toggle ready hatası:", e);
+      }
+    }
+
+    // Bir masadaki tüm ürünleri hazır yap ve hemen ekrandan düşür
+    async function markAllOrderReady(orderId) {
+      const order = orders.find(o => o.id === orderId);
+      if (order) {
+        order.products.forEach(p => p.isReady = true);
+        dropCompletedServisOrder(orderId);
+      }
+
+      try {
+        await fetch('/api/orders/mark-all-ready', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: orderId })
+        });
+      } catch (e) {
+        console.error("Mark all ready hatası:", e);
+      }
+    }
+
+    // Tamamlananları Göster / Gizle Butonu
+    function toggleShowCompleted() {
+      showCompleted = !showCompleted;
+      renderOrders();
+    }
+
+    // Kartları Ekrana Bas (Tüm Adisyon Ürünleri ve Hazır Butonları)
+    function renderOrders() {
+      const container = document.getElementById('orders-grid');
+      const emptyState = document.getElementById('empty-state');
+      const toggleBtn = document.getElementById('completed-toggle-btn');
+      const toggleText = document.getElementById('completed-toggle-text');
+
+      // Tamamlananlar butonu sayısını güncelle
+      const completedCount = dismissedServisOrders.size;
+      if (completedCount > 0) {
+        toggleBtn.classList.remove('hidden');
+        toggleBtn.classList.add('flex');
+        toggleText.textContent = showCompleted ? `Tamamlananları Gizle (${completedCount})` : `Tamamlananları Göster (${completedCount})`;
+      } else {
+        toggleBtn.classList.add('hidden');
+        toggleBtn.classList.remove('flex');
+      }
+
+      // Filtreleme: Hazırlanacak ürün kalmayanlar (düşürülenler) gizlenir
+      const activeOrders = orders.filter(o => {
+        const allReady = o.products.length > 0 && o.products.every(p => p.isReady);
+        
+        if (showCompleted) {
+          return true; // Kullanıcı tamamlananları görmek istiyorsa hepsini göster
+        }
+
+        if (allReady && dismissedServisOrders.has(o.id)) {
+          return false;
+        }
+
+        // Eğer ürünlerden biri tekrar hazır değilse geri çıkar
+        if (!allReady && dismissedServisOrders.has(o.id)) {
+          dismissedServisOrders.delete(o.id);
+        }
+
+        return true;
+      });
+
+      if (!activeOrders || activeOrders.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      // En uzun süredir bekleyen (en eski) en başta durur
+      activeOrders.sort((a, b) => b.secondsElapsed - a.secondsElapsed);
+
+      container.innerHTML = activeOrders.map((order) => {
+        let timerBg = "bg-emerald-50 text-emerald-700 border-emerald-300";
+        let cardBorder = "border-slate-300";
+        let headerBg = "bg-slate-50";
+
+        if (order.secondsElapsed >= 600) { // 10+ dk
+          timerBg = "bg-red-600 text-white border-red-700 animate-pulse font-black shadow-sm";
+          cardBorder = "border-red-500 shadow-lg card-urgent";
+          headerBg = "bg-red-50/80";
+        } else if (order.secondsElapsed >= 300) { // 5-10 dk
+          timerBg = "bg-amber-100 text-amber-900 border-amber-400 font-bold";
+          cardBorder = "border-amber-400 shadow-md";
+          headerBg = "bg-amber-50/60";
+        }
+
+        // Sipariş tipi rozeti
+        let orderTypeBadge = "bg-slate-800 text-white";
+        if (order.orderType === 'PAKET') orderTypeBadge = "bg-blue-600 text-white font-black";
+        if (order.orderType === 'GEL-AL') orderTypeBadge = "bg-purple-600 text-white font-black";
+
+        // Hazır ürün sayısı
+        const totalItems = order.products.length;
+        const readyItems = order.products.filter(p => p.isReady).length;
+        const isAllReady = totalItems > 0 && readyItems === totalItems;
+
+        // Otomatik düşürme tetikle (eğer daha önce düşürülmediyse)
+        if (isAllReady && !droppingAnimationOrders.has(order.id) && !dismissedServisOrders.has(order.id) && !showCompleted) {
+          setTimeout(() => dropCompletedServisOrder(order.id), 200);
+        }
+
+        return `
+          <div id="card-${order.id}" class="bg-white rounded-2xl border-2 ${cardBorder} shadow-sm overflow-hidden flex flex-col transition-all duration-300 order-enter">
+            
+            <!-- KART BAŞLIĞI: MASA VE CANLI SAYAÇ -->
+            <div class="${headerBg} px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider ${orderTypeBadge}">
+                    ${order.orderType}
+                  </span>
+                  <span class="text-xs font-bold text-slate-500">#${order.orderNumber}</span>
+                </div>
+                <h2 class="text-xl font-black text-slate-900 mt-1 leading-tight tracking-tight">
+                  ${order.tableName}
+                </h2>
+              </div>
+
+              <!-- CANLI SAYAÇ ROZETİ -->
+              <div id="timer-${order.id}" class="px-3 py-1.5 rounded-xl border text-base tracking-wider ${timerBg}">
+                ⏱ ${formatTime(order.secondsElapsed)}
+              </div>
+            </div>
+
+            <!-- HAZIRLIK DURUM ÇUBUĞU VE TÜMÜ HAZIR BUTONU -->
+            <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs font-bold">
+              <span class="${isAllReady ? 'text-emerald-700 font-black' : 'text-slate-600'}">
+                ${isAllReady ? '✓ TÜM ÜRÜNLER HAZIR' : `Hazırlık: ${readyItems} / ${totalItems}`}
+              </span>
+              ${!isAllReady ? `
+                <button onclick="markAllOrderReady(${order.id})" class="text-[11px] px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition font-black active:scale-95 shadow-sm flex items-center gap-1">
+                  <span>✓</span> <span>Tümü Hazır</span>
+                </button>
+              ` : `
+                <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[11px] font-black">
+                  Servise Çıktı
+                </span>
+              `}
+            </div>
+
+            <!-- TÜM ÜRÜNLER LİSTESİ (PİZZA, İÇECEK, SALATA, TATLI) -->
+            <div class="p-4 space-y-3 flex-1">
+              ${order.products.map((item) => {
+                const isReady = item.isReady;
+                const cat = getCategoryBadge(item.category, item.isPizza);
+
+                return `
+                  <div class="p-3 rounded-xl border transition-all ${
+                    isReady 
+                      ? 'bg-emerald-50/70 border-emerald-300' 
+                      : 'bg-white border-slate-200 hover:border-slate-300'
+                  }">
+                    <div class="flex items-center justify-between gap-3">
+                      
+                      <!-- SOL: ÜRÜN BİLGİSİ -->
+                      <div class="flex items-start gap-2.5 flex-1 min-w-0">
+                        <span class="text-base font-black px-2 py-0.5 rounded-md flex-shrink-0 ${
+                          isReady 
+                            ? 'bg-emerald-200 text-emerald-800 line-through' 
+                            : 'bg-amber-100 text-amber-900'
+                        }">
+                          ${item.qty}x
+                        </span>
+
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${cat.badgeClass}">
+                              ${cat.icon} ${cat.label}
+                            </span>
+                            <span class="text-sm font-black leading-tight ${
+                              isReady 
+                                ? 'line-through text-slate-400' 
+                                : 'text-slate-900'
+                            }">
+                              ${item.name}
+                            </span>
+                          </div>
+
+                          <!-- ÜRÜN NOTU -->
+                          ${item.note ? `
+                            <div class="mt-1.5 inline-flex items-center gap-1 bg-rose-50 border border-rose-300 text-rose-900 px-2 py-0.5 rounded text-[11px] font-black tracking-wide">
+                              <span>⚠️</span>
+                              <span>${item.note}</span>
+                            </div>
+                          ` : ''}
+                        </div>
+                      </div>
+
+                      <!-- SAĞ: HAZIR BUTONU -->
+                      <div class="flex-shrink-0">
+                        <button 
+                          onclick="toggleProductReady(${order.id}, '${item.id}')"
+                          class="px-3.5 py-1.5 rounded-xl font-black text-xs transition active:scale-95 flex items-center gap-1.5 shadow-sm ${
+                            isReady 
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                              : 'bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-700 border border-slate-300 hover:border-emerald-600'
+                          }"
+                        >
+                          <span>${isReady ? '✓ Hazır' : 'Hazır'}</span>
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Sipariş Adisyo'da kapandığında düşürme animasyonu
+    function animateAndRemoveOrder(orderId) {
+      dropCompletedServisOrder(orderId);
+    }
+
+    // --- SENKRONİZASYON VE CANLI BAĞLANTI ---
+    async function syncOrders() {
+      try {
+        const res = await fetch('/api/orders');
+        if (!res.ok) throw new Error('API Hatası');
+        const data = await res.json();
+        const serverOrders = data.orders || [];
+
+        const currentIds = new Set(serverOrders.map(o => o.id));
+
+        // Yeni gelen siparişleri tespit et ve ses çal
+        let hasNewOrder = false;
+        serverOrders.forEach(so => {
+          if (!previousOrderIds.has(so.id) && !isFirstLoad) {
+            hasNewOrder = true;
+          }
+        });
+
+        if (hasNewOrder) {
+          playKitchenChime();
+        }
+
+        // Adisyo'da tamamen kapanan masaları temizle
+        dismissedServisOrders.forEach(dismissedId => {
+          if (!currentIds.has(dismissedId)) {
+            dismissedServisOrders.delete(dismissedId);
+          }
+        });
+
+        // Mevcut siparişleri güncelle
+        orders = serverOrders;
+        previousOrderIds = currentIds;
+        isFirstLoad = false;
+
+        // Üst durum bilgisini güncelle
+        const statusEl = document.getElementById('sync-status');
+        if (statusEl) {
+          const visibleCount = orders.filter(o => !dismissedServisOrders.has(o.id)).length;
+          const syncTime = data.lastSyncTime || 'Canlı';
+          statusEl.textContent = `Adisyo Canlı (${visibleCount} Bekleyen Masa • ${syncTime})`;
+        }
+
+        renderOrders();
+      } catch (e) {
+        const statusEl = document.getElementById('sync-status');
+        if (statusEl) {
+          statusEl.textContent = 'Bağlantı Bekleniyor...';
+        }
+      }
+    }
+
+    // İlk yükleme ve periyodik sorgulama (Her 2.5 saniyede bir)
+    syncOrders();
+    setInterval(syncOrders, 2500);
+
+    // Manuel Senkronizasyon Butonu
+    async function manualSync() {
+      const statusEl = document.getElementById('sync-status');
+      if (statusEl) statusEl.textContent = 'Adisyo Taranıyor...';
+      try {
+        await fetch('/api/sync-now', { method: 'POST' });
+      } catch (e) {}
+      await syncOrders();
+    }
+
+    // Ses Aç/Kapat
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const icon = document.getElementById('sound-icon');
+      const text = document.getElementById('sound-text');
+      if (soundEnabled) {
+        icon.textContent = '🔔';
+        text.textContent = 'Ses Açık';
+        playKitchenChime();
+      } else {
+        icon.textContent = '🔕';
+        text.textContent = 'Sessiz';
+      }
+    }
+
+    // Canlı Sayaç Güncelleme (Her saniye)
+    setInterval(() => {
+      orders.forEach(order => {
+        order.secondsElapsed += 1;
+        const timerEl = document.getElementById(`timer-${order.id}`);
+        if (timerEl) {
+          timerEl.textContent = `⏱ ${formatTime(order.secondsElapsed)}`;
+          if (order.secondsElapsed >= 600 && !timerEl.classList.contains('bg-red-600')) {
+            renderOrders();
+          } else if (order.secondsElapsed >= 300 && timerEl.classList.contains('bg-emerald-50')) {
+            renderOrders();
+          }
+        }
+      });
+    }, 1000);
+
+    // Tam Ekran
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    // Klavye kısayolları (Test amaçlı): N = Yeni Sipariş, H = Sipariş Düşür
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'n' || e.key === 'N') {
+        fetch('/api/test/new-order', { method: 'POST' }).then(syncOrders).catch(() => {});
+      } else if (e.key === 'h' || e.key === 'H' || e.code === 'Space') {
+        fetch('/api/test/drop-order', { method: 'POST' }).then(syncOrders).catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>
