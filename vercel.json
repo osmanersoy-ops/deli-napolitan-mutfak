@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/mutfak", "destination": "/mutfak.html" },
+    { "source": "/servis", "destination": "/servis.html" },
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/api/products/toggle-ready", "destination": "/api/toggle-ready" },
+    { "source": "/api/orders/mark-all-ready", "destination": "/api/mark-all-ready" },
+    { "source": "/api/orders/notify-adisyo", "destination": "/api/notify-adisyo" },
+    { "source": "/api/adisyo/webhook", "destination": "/api/webhook" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,POST,PUT,PATCH,DELETE" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    }
+  ]
+}
