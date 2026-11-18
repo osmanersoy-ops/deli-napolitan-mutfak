@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 const ADISYO_BASE_URL = process.env.ADISYO_BASE_URL || 'https://ext.adisyo.com/api/External/v2';
 const ADISYO_API_KEY = process.env.ADISYO_API_KEY || '25b80b3556ca3a15353dd2fd312062fad27adcf5a1de51b75bdadea1fa8214ab';
 const ADISYO_API_SECRET = process.env.ADISYO_API_SECRET || '65e70574-2b17-42a1-b093-4128ad9aff44';
@@ -12,6 +14,28 @@ let lastSyncTimeString = null;
 let lastSyncStatus = 'Başlatılıyor...';
 let readyProductIds = new Set();
 let isFetching = false;
+
+const READY_FILE = '/tmp/kds_ready.json';
+
+function loadReadyIds() {
+  try {
+    if (fs.existsSync(READY_FILE)) {
+      const arr = JSON.parse(fs.readFileSync(READY_FILE, 'utf8'));
+      if (Array.isArray(arr)) {
+        arr.forEach(id => readyProductIds.add(String(id)));
+      }
+    }
+  } catch (e) {}
+}
+
+function saveReadyIds() {
+  try {
+    fs.writeFileSync(READY_FILE, JSON.stringify(Array.from(readyProductIds)), 'utf8');
+  } catch (e) {}
+}
+
+// Initial load
+loadReadyIds();
 
 function normalizeTurkish(text) {
   if (!text) return '';
@@ -200,6 +224,7 @@ async function fetchFromAdisyo(force = false) {
 }
 
 function getOrdersPayload() {
+  loadReadyIds();
   const formatted = cachedOrders
     .map(formatOrder)
     .filter(Boolean)
@@ -223,6 +248,8 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
+  loadReadyIds();
+
   const url = req.url || '';
   const body = req.body || {};
   const action = req.query?.action || body?.action;
@@ -230,11 +257,20 @@ module.exports = async function handler(req, res) {
   // 1. TOGGLE READY: action === 'toggle-ready' veya body.productId
   if (action === 'toggle-ready' || body.productId) {
     const pid = String(body.productId);
-    if (readyProductIds.has(pid)) {
-      readyProductIds.delete(pid);
+    if (typeof body.isReady === 'boolean') {
+      if (body.isReady) {
+        readyProductIds.add(pid);
+      } else {
+        readyProductIds.delete(pid);
+      }
     } else {
-      readyProductIds.add(pid);
+      if (readyProductIds.has(pid)) {
+        readyProductIds.delete(pid);
+      } else {
+        readyProductIds.add(pid);
+      }
     }
+    saveReadyIds();
     return res.status(200).json({ success: true, productId: pid, isReady: readyProductIds.has(pid) });
   }
 
@@ -260,6 +296,7 @@ module.exports = async function handler(req, res) {
     }
 
     cachedOrders = cachedOrders.filter(o => o.id !== oid);
+    saveReadyIds();
     return res.status(200).json({ success: true, orderId: oid });
   }
 
@@ -269,8 +306,12 @@ module.exports = async function handler(req, res) {
     return res.status(200).json(getOrdersPayload());
   }
 
-  // 4. DEFAULT: GET ORDERS LIST
-  res.setHeader('Cache-Control', 'public, s-maxage=3, stale-while-revalidate=10');
+  // 4. DEFAULT: GET ORDERS LIST (Strict anti-cache headers so client never gets stale state)
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+
   const now = Date.now();
   if (now - lastFetchTime >= 30000) {
     await fetchFromAdisyo(false);

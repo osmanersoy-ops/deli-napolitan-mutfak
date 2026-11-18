@@ -101,6 +101,26 @@
     const dismissedMutfakOrders = new Set();
     const droppingAnimationOrders = new Set();
 
+    // Ekran titremesini ve sayaç sıçramasını önleyen değişkenler
+    let lastRenderSignature = '';
+    const renderedCardIds = new Set();
+
+    function getOrderSeconds(order) {
+      if (!order.insertDate) return order.secondsElapsed || 0;
+      let s = String(order.insertDate);
+      if (!s.includes('+') && !s.includes('Z')) s += '+03:00';
+      const start = new Date(s).getTime();
+      if (isNaN(start)) return order.secondsElapsed || 0;
+      return Math.max(0, Math.floor((Date.now() - start) / 1000));
+    }
+
+    function computeOrdersSignature(orderList) {
+      return orderList.map(o => {
+        const prodSig = (o.pizzas || []).map(p => `${p.id}:${p.isReady ? 1 : 0}`).join(',');
+        return `${o.id}_${prodSig}`;
+      }).join('|') + `_${dismissedMutfakOrders.size}`;
+    }
+
     // Web Audio Mutfak Zili
     function playKitchenChime() {
       if (!soundEnabled) return;
@@ -236,8 +256,13 @@
           setTimeout(() => dropCompletedPizzaOrder(order.id), 200);
         }
 
+        // Yalnızca yeni açılan masaya giriş animasyonu ver (mevcut kartlar titremesin)
+        const isNew = !renderedCardIds.has(order.id);
+        renderedCardIds.add(order.id);
+        const animClass = isNew ? 'order-enter' : '';
+
         return `
-          <div id="card-${order.id}" class="bg-white rounded-2xl border-2 ${cardBorder} shadow-sm overflow-hidden flex flex-col transition-all duration-300 order-enter">
+          <div id="card-${order.id}" class="bg-white rounded-2xl border-2 ${cardBorder} shadow-sm overflow-hidden flex flex-col transition-all duration-300 ${animClass}">
             
             <!-- KART BAŞLIĞI: MASA VE CANLI SAYAÇ -->
             <div class="${headerBg} px-4 py-3 border-b border-slate-200 flex items-center justify-between">
@@ -363,21 +388,36 @@
             dismissedMutfakOrders.delete(dismissedId);
           }
         });
+        renderedCardIds.forEach(renderedId => {
+          if (!currentIds.has(renderedId)) {
+            renderedCardIds.delete(renderedId);
+          }
+        });
 
-        // Mevcut siparişleri güncelle
-        orders = serverOrders;
-        previousOrderIds = currentIds;
-        isFirstLoad = false;
+        serverOrders.forEach(so => {
+          so.secondsElapsed = getOrderSeconds(so);
+        });
 
-        // Üst durum bilgisini güncelle
+        // Üst durum bilgisini güncelle (kartları etkilemez)
         const statusEl = document.getElementById('sync-status');
         if (statusEl) {
-          const visibleCount = orders.filter(o => o.pizzas && o.pizzas.length > 0 && !dismissedMutfakOrders.has(o.id)).length;
+          const visibleCount = serverOrders.filter(o => o.pizzas && o.pizzas.length > 0 && !dismissedMutfakOrders.has(o.id)).length;
           const syncTime = data.lastSyncTime || 'Canlı';
           statusEl.textContent = `Adisyo Canlı (${visibleCount} Fırın Bekleyen • ${syncTime})`;
         }
 
-        renderOrders();
+        // TİTREME ÖNLEYİCİ: Yalnızca siparişler veya pizza durumları değiştiyse DOM'u güncelle
+        const newSig = computeOrdersSignature(serverOrders);
+        const dataChanged = (newSig !== lastRenderSignature);
+
+        orders = serverOrders;
+        previousOrderIds = currentIds;
+        isFirstLoad = false;
+
+        if (dataChanged) {
+          lastRenderSignature = newSig;
+          renderOrders();
+        }
       } catch (e) {
         const statusEl = document.getElementById('sync-status');
         if (statusEl) {
@@ -415,17 +455,18 @@
       }
     }
 
-    // Canlı Sayaç Güncelleme (Her saniye)
+    // Canlı Sayaç Güncelleme (Her saniye Düzgün ve Akıcı)
     setInterval(() => {
       orders.forEach(order => {
-        order.secondsElapsed += 1;
+        const elapsed = getOrderSeconds(order);
+        order.secondsElapsed = elapsed;
         const timerEl = document.getElementById(`timer-${order.id}`);
         if (timerEl) {
-          timerEl.textContent = `⏱ ${formatTime(order.secondsElapsed)}`;
-          if (order.secondsElapsed >= 600 && !timerEl.classList.contains('bg-red-600')) {
-            renderOrders();
-          } else if (order.secondsElapsed >= 300 && timerEl.classList.contains('bg-emerald-50')) {
-            renderOrders();
+          timerEl.textContent = `⏱ ${formatTime(elapsed)}`;
+          if (elapsed >= 600 && !timerEl.classList.contains('bg-red-600')) {
+            timerEl.className = "px-3 py-1.5 rounded-xl border text-base tracking-wider bg-red-600 text-white border-red-700 animate-pulse font-black shadow-sm";
+          } else if (elapsed >= 300 && elapsed < 600 && !timerEl.classList.contains('bg-amber-100')) {
+            timerEl.className = "px-3 py-1.5 rounded-xl border text-base tracking-wider bg-amber-100 text-amber-900 border-amber-400 font-bold";
           }
         }
       });

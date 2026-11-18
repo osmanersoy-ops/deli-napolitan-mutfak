@@ -108,6 +108,29 @@
     const droppingAnimationOrders = new Set();
     let showCompleted = false;
 
+    // Yerel hazır kilit haritası (sunucu gecikmesinde durumun geri dönmesini engeller)
+    const localReadyOverrides = new Map(); // pid -> { isReady: boolean, timestamp: number }
+
+    // Ekran titremesini ve gereksiz yeniden çizimleri önleyen değişkenler
+    let lastRenderSignature = '';
+    const renderedCardIds = new Set();
+
+    function getOrderSeconds(order) {
+      if (!order.insertDate) return order.secondsElapsed || 0;
+      let s = String(order.insertDate);
+      if (!s.includes('+') && !s.includes('Z')) s += '+03:00';
+      const start = new Date(s).getTime();
+      if (isNaN(start)) return order.secondsElapsed || 0;
+      return Math.max(0, Math.floor((Date.now() - start) / 1000));
+    }
+
+    function computeOrdersSignature(orderList) {
+      return orderList.map(o => {
+        const prodSig = (o.products || []).map(p => `${p.id}:${p.isReady ? 1 : 0}`).join(',');
+        return `${o.id}_${prodSig}`;
+      }).join('|') + `_${showCompleted}_${dismissedServisOrders.size}`;
+    }
+
     // Web Audio Servis Zili
     function playKitchenChime() {
       if (!soundEnabled) return;
@@ -194,34 +217,39 @@
     // Ürün Hazır Butonuna Tıklandığında
     async function toggleProductReady(orderId, productId) {
       const order = orders.find(o => o.id === orderId);
-      if (order) {
-        const prod = order.products.find(p => String(p.id) === String(productId));
-        if (prod) {
-          prod.isReady = !prod.isReady;
+      if (!order) return;
+      const prod = order.products.find(p => String(p.id) === String(productId));
+      if (!prod) return;
 
-          // Eğer tüm ürünler hazırlandıysa otomatik düşür ve Adisyo'ya bildir
-          const allReady = order.products.every(p => p.isReady);
-          if (allReady) {
-            dropCompletedServisOrder(orderId);
-            fetch('/api/orders', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'notify-adisyo', orderId: orderId })
-            }).catch(() => {});
-          } else {
-            // Eğer daha önce düşürüldüyse ama bir ürün geri alındıysa ekranına geri getir
-            dismissedServisOrders.delete(orderId);
-            renderOrders();
-          }
-        }
+      prod.isReady = !prod.isReady;
+      const targetState = prod.isReady;
+
+      // 15 saniyelik yerel kilit (sunucudan eski veri gelirse ezilmesin)
+      localReadyOverrides.set(String(productId), { isReady: targetState, timestamp: Date.now() });
+
+      // Eğer tüm ürünler hazırlandıysa otomatik düşür ve Adisyo'ya bildir
+      const allReady = order.products.every(p => p.isReady);
+      if (allReady) {
+        dropCompletedServisOrder(orderId);
+        fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'notify-adisyo', orderId: orderId })
+        }).catch(() => {});
+      } else {
+        dismissedServisOrders.delete(orderId);
       }
 
-      // Sunucuya bildir (Mutfak ekranına da anında yansır)
+      // Anında ekrana yansıt (0ms gecikme, titreme olmadan)
+      lastRenderSignature = '';
+      renderOrders();
+
+      // Sunucuya bildir
       try {
         await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'toggle-ready', productId: productId })
+          body: JSON.stringify({ action: 'toggle-ready', productId: productId, isReady: targetState })
         });
       } catch (e) {
         console.error("Toggle ready hatası:", e);
@@ -232,9 +260,15 @@
     async function markAllOrderReady(orderId) {
       const order = orders.find(o => o.id === orderId);
       if (order) {
-        order.products.forEach(p => p.isReady = true);
+        order.products.forEach(p => {
+          p.isReady = true;
+          localReadyOverrides.set(String(p.id), { isReady: true, timestamp: Date.now() });
+        });
         dropCompletedServisOrder(orderId);
       }
+
+      lastRenderSignature = '';
+      renderOrders();
 
       try {
         await fetch('/api/orders', {
@@ -332,8 +366,13 @@
           setTimeout(() => dropCompletedServisOrder(order.id), 200);
         }
 
+        // Yalnızca yeni açılan masaya giriş animasyonu ver (mevcut kartlar titremesin)
+        const isNew = !renderedCardIds.has(order.id);
+        renderedCardIds.add(order.id);
+        const animClass = isNew ? 'order-enter' : '';
+
         return `
-          <div id="card-${order.id}" class="bg-white rounded-2xl border-2 ${cardBorder} shadow-sm overflow-hidden flex flex-col transition-all duration-300 order-enter">
+          <div id="card-${order.id}" class="bg-white rounded-2xl border-2 ${cardBorder} shadow-sm overflow-hidden flex flex-col transition-all duration-300 ${animClass}">
             
             <!-- KART BAŞLIĞI: MASA VE CANLI SAYAÇ -->
             <div class="${headerBg} px-4 py-3 border-b border-slate-200 flex items-center justify-between">
@@ -477,21 +516,49 @@
             dismissedServisOrders.delete(dismissedId);
           }
         });
+        renderedCardIds.forEach(renderedId => {
+          if (!currentIds.has(renderedId)) {
+            renderedCardIds.delete(renderedId);
+          }
+        });
 
-        // Mevcut siparişleri güncelle
-        orders = serverOrders;
-        previousOrderIds = currentIds;
-        isFirstLoad = false;
+        // Yerel kilitleri (localReadyOverrides) uygula ve akıcı süreyi hesapla
+        const now = Date.now();
+        serverOrders.forEach(so => {
+          so.secondsElapsed = getOrderSeconds(so);
+          (so.products || []).forEach(p => {
+            const pid = String(p.id);
+            if (localReadyOverrides.has(pid)) {
+              const item = localReadyOverrides.get(pid);
+              if (now - item.timestamp < 15000) {
+                p.isReady = item.isReady;
+              } else {
+                localReadyOverrides.delete(pid);
+              }
+            }
+          });
+        });
 
-        // Üst durum bilgisini güncelle
+        // Üst durum bilgisini güncelle (kartları etkilemez)
         const statusEl = document.getElementById('sync-status');
         if (statusEl) {
-          const visibleCount = orders.filter(o => !dismissedServisOrders.has(o.id)).length;
+          const visibleCount = serverOrders.filter(o => !dismissedServisOrders.has(o.id)).length;
           const syncTime = data.lastSyncTime || 'Canlı';
           statusEl.textContent = `Adisyo Canlı (${visibleCount} Bekleyen Masa • ${syncTime})`;
         }
 
-        renderOrders();
+        // TİTREME ÖNLEYİCİ: Yalnızca sipariş listesi veya hazır durumları gerçekten değiştiyse DOM'u güncelle!
+        const newSig = computeOrdersSignature(serverOrders);
+        const dataChanged = (newSig !== lastRenderSignature);
+
+        orders = serverOrders;
+        previousOrderIds = currentIds;
+        isFirstLoad = false;
+
+        if (dataChanged) {
+          lastRenderSignature = newSig;
+          renderOrders();
+        }
       } catch (e) {
         const statusEl = document.getElementById('sync-status');
         if (statusEl) {
@@ -529,17 +596,18 @@
       }
     }
 
-    // Canlı Sayaç Güncelleme (Her saniye)
+    // Canlı Sayaç Güncelleme (Her saniye Düzgün ve Akıcı)
     setInterval(() => {
       orders.forEach(order => {
-        order.secondsElapsed += 1;
+        const elapsed = getOrderSeconds(order);
+        order.secondsElapsed = elapsed;
         const timerEl = document.getElementById(`timer-${order.id}`);
         if (timerEl) {
-          timerEl.textContent = `⏱ ${formatTime(order.secondsElapsed)}`;
-          if (order.secondsElapsed >= 600 && !timerEl.classList.contains('bg-red-600')) {
-            renderOrders();
-          } else if (order.secondsElapsed >= 300 && timerEl.classList.contains('bg-emerald-50')) {
-            renderOrders();
+          timerEl.textContent = `⏱ ${formatTime(elapsed)}`;
+          if (elapsed >= 600 && !timerEl.classList.contains('bg-red-600')) {
+            timerEl.className = "px-3 py-1.5 rounded-xl border text-base tracking-wider bg-red-600 text-white border-red-700 animate-pulse font-black shadow-sm";
+          } else if (elapsed >= 300 && elapsed < 600 && !timerEl.classList.contains('bg-amber-100')) {
+            timerEl.className = "px-3 py-1.5 rounded-xl border text-base tracking-wider bg-amber-100 text-amber-900 border-amber-400 font-bold";
           }
         }
       });
