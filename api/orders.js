@@ -225,7 +225,28 @@ async function handler(req, res) {
   return res.status(200).json(getOrdersPayload());
 }
 
+function updateCachedOrder(order) {
+  if (!order || !order.id) return;
+  const existingIdx = cachedOrders.findIndex(o => o.id === order.id);
+  if (existingIdx >= 0) {
+    cachedOrders[existingIdx] = order;
+  } else {
+    cachedOrders.push(order);
+  }
+  try {
+    lastSyncTimeString = new Intl.DateTimeFormat('tr-TR', {
+      timeZone: 'Europe/Istanbul',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }).format(new Date());
+  } catch (e) {
+    lastSyncTimeString = new Date().toLocaleTimeString('tr-TR');
+  }
+}
+
 module.exports = handler;
 module.exports.default = handler;
 module.exports.fetchFromAdisyo = fetchFromAdisyo;
 module.exports.getOrdersPayload = getOrdersPayload;
+module.exports.updateCachedOrder = updateCachedOrder;
