@@ -1,5 +1,3 @@
-const fs = require('fs');
-
 const ADISYO_BASE_URL = process.env.ADISYO_BASE_URL || 'https://ext.adisyo.com/api/External/v2';
 const ADISYO_API_KEY = process.env.ADISYO_API_KEY || '25b80b3556ca3a15353dd2fd312062fad27adcf5a1de51b75bdadea1fa8214ab';
 const ADISYO_API_SECRET = process.env.ADISYO_API_SECRET || '65e70574-2b17-42a1-b093-4128ad9aff44';
@@ -7,51 +5,13 @@ const ADISYO_API_CONSUMER = process.env.ADISYO_API_CONSUMER || 'Deli Napolitan';
 
 const PIZZA_KEYWORDS = ['pizza', 'pizzalar', 'napolitan', 'calzone', 'pizzetta'];
 
-// Global state in container memory
+// Global state in warm container memory
 let cachedOrders = [];
 let lastFetchTime = 0;
 let lastSyncTimeString = null;
 let lastSyncStatus = 'Başlatılıyor...';
 let readyProductIds = new Set();
 let isFetching = false;
-
-// File persistence in /tmp
-const STATE_FILE = '/tmp/kds_state.json';
-
-function tryLoadState() {
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-      if (Array.isArray(data.cachedOrders) && cachedOrders.length === 0) {
-        cachedOrders = data.cachedOrders;
-      }
-      if (typeof data.lastFetchTime === 'number' && data.lastFetchTime > lastFetchTime) {
-        lastFetchTime = data.lastFetchTime;
-      }
-      if (data.lastSyncTimeString && !lastSyncTimeString) {
-        lastSyncTimeString = data.lastSyncTimeString;
-      }
-      if (data.lastSyncStatus && lastSyncStatus === 'Başlatılıyor...') {
-        lastSyncStatus = data.lastSyncStatus;
-      }
-      if (Array.isArray(data.readyProductIds)) {
-        data.readyProductIds.forEach(id => readyProductIds.add(id));
-      }
-    }
-  } catch (e) {}
-}
-
-function trySaveState() {
-  try {
-    fs.writeFileSync(STATE_FILE, JSON.stringify({
-      cachedOrders,
-      lastFetchTime,
-      lastSyncTimeString,
-      lastSyncStatus,
-      readyProductIds: Array.from(readyProductIds)
-    }), 'utf8');
-  } catch (e) {}
-}
 
 function normalizeTurkish(text) {
   if (!text) return '';
@@ -185,7 +145,6 @@ function formatOrder(order) {
 }
 
 async function fetchFromAdisyo(force = false) {
-  tryLoadState();
   const now = Date.now();
 
   // KESİN ADİSYO KURALI: En az 30 saniye geçmeden ASLA istek atılmaz!
@@ -195,7 +154,7 @@ async function fetchFromAdisyo(force = false) {
 
   if (isFetching) return cachedOrders;
   isFetching = true;
-  lastFetchTime = Date.now(); // Mutex kilidi: sonraki istekleri hemen beklemeye al
+  lastFetchTime = Date.now(); // Mutex kilidi: Sonraki istekler hemen beklemeye geçer
 
   const url = `${ADISYO_BASE_URL}/RecentOrders?orderType=TakeAway,Table,Retail&onlyRestaurantCourier=false`;
   try {
@@ -226,12 +185,10 @@ async function fetchFromAdisyo(force = false) {
         lastSyncTimeString = new Date().toLocaleTimeString('tr-TR');
       }
       lastSyncStatus = 'Canlı Bağlı';
-      trySaveState();
     } else if (text.includes('601')) {
-      // 601 Kota uyarısı: Sayacı sıfırla ki en az 30s beklesin
+      // 601 Kota uyarısı
       lastFetchTime = Date.now();
       lastSyncStatus = 'Adisyo kota koruması (30s)';
-      trySaveState();
     }
   } catch (err) {
     console.error('[Adisyo Fetch Error]', err);
@@ -266,75 +223,26 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
-  tryLoadState();
-
   const url = req.url || '';
   const body = req.body || {};
+  const action = req.query?.action || body?.action;
 
-  // 1. WEBHOOK ENDPOINT: /api/webhook
-  if (url.includes('/api/webhook') || url.includes('webhook')) {
-    const bodyText = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
-    if (
-      req.method === 'GET' ||
-      bodyText.toLowerCase().includes('handshake') ||
-      !req.body ||
-      Object.keys(req.body).length === 0
-    ) {
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      return res.status(200).send('adisyo');
-    }
-
-    try {
-      const incomingOrder = body?.data || (body?.id && body?.products ? body : null);
-      if (incomingOrder && incomingOrder.id) {
-        const existingIdx = cachedOrders.findIndex(o => o.id === incomingOrder.id);
-        if (existingIdx >= 0) {
-          cachedOrders[existingIdx] = incomingOrder;
-        } else {
-          cachedOrders.push(incomingOrder);
-        }
-        try {
-          lastSyncTimeString = new Intl.DateTimeFormat('tr-TR', {
-            timeZone: 'Europe/Istanbul',
-            hour: '2-digit', minute: '2-digit', second: '2-digit'
-          }).format(new Date());
-        } catch (e) {
-          lastSyncTimeString = new Date().toLocaleTimeString('tr-TR');
-        }
-        lastSyncStatus = 'Webhook Anlık Bağlı';
-        trySaveState();
-      } else {
-        await fetchFromAdisyo(false);
-      }
-    } catch (e) {}
-
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    return res.status(200).send('adisyo');
-  }
-
-  // 2. TOGGLE READY: /api/toggle-ready
-  if (url.includes('toggle-ready')) {
-    const { productId } = body;
-    if (!productId) return res.status(400).json({ error: 'Eksik productId' });
-    const pid = String(productId);
+  // 1. TOGGLE READY: action === 'toggle-ready' veya body.productId
+  if (action === 'toggle-ready' || body.productId) {
+    const pid = String(body.productId);
     if (readyProductIds.has(pid)) {
       readyProductIds.delete(pid);
     } else {
       readyProductIds.add(pid);
     }
-    trySaveState();
     return res.status(200).json({ success: true, productId: pid, isReady: readyProductIds.has(pid) });
   }
 
-  // 3. MARK ALL READY / NOTIFY ADISYO: /api/mark-all-ready or /api/notify-adisyo
-  if (url.includes('mark-all-ready') || url.includes('notify-adisyo')) {
-    const { orderId } = body;
-    if (!orderId) return res.status(400).json({ error: 'Eksik orderId' });
-    const oid = Number(orderId);
-
-    // Adisyo POS'a bildir (Masa mavi renge döner / Hazırlandı)
-    try {
-      if (oid && oid < 1000000000000) {
+  // 2. MARK ALL READY / NOTIFY ADISYO: action === 'mark-all-ready' veya 'notify-adisyo' veya body.orderId (POST)
+  if (action === 'mark-all-ready' || action === 'notify-adisyo' || (body.orderId && req.method === 'POST')) {
+    const oid = Number(body.orderId);
+    if (oid && oid < 1000000000000) {
+      try {
         await fetch(`${ADISYO_BASE_URL}/Prepared`, {
           method: 'POST',
           headers: {
@@ -346,24 +254,22 @@ module.exports = async function handler(req, res) {
           },
           body: JSON.stringify({ orderId: oid })
         });
+      } catch (err) {
+        console.error('[Adisyo Prepared Error]', err);
       }
-    } catch (err) {
-      console.error('[Adisyo Prepared Error]', err);
     }
 
-    // Önbellekten kaldır
     cachedOrders = cachedOrders.filter(o => o.id !== oid);
-    trySaveState();
     return res.status(200).json({ success: true, orderId: oid });
   }
 
-  // 4. SYNC NOW: /api/sync-now
-  if (url.includes('sync-now')) {
+  // 3. SYNC NOW: action === 'sync-now'
+  if (action === 'sync-now') {
     await fetchFromAdisyo(true);
     return res.status(200).json(getOrdersPayload());
   }
 
-  // 5. DEFAULT: ORDERS LIST (/api/orders)
+  // 4. DEFAULT: GET ORDERS LIST
   res.setHeader('Cache-Control', 'public, s-maxage=3, stale-while-revalidate=10');
   const now = Date.now();
   if (now - lastFetchTime >= 30000) {
@@ -375,4 +281,3 @@ module.exports = async function handler(req, res) {
 
 module.exports.fetchFromAdisyo = fetchFromAdisyo;
 module.exports.getOrdersPayload = getOrdersPayload;
-module.exports.formatOrder = formatOrder;

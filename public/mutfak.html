@@ -395,7 +395,7 @@
       const statusEl = document.getElementById('sync-status');
       if (statusEl) statusEl.textContent = 'Adisyo Taranıyor...';
       try {
-        await fetch('/api/sync-now', { method: 'POST' });
+        await fetch('/api/orders?action=sync-now', { method: 'POST' });
       } catch (e) {}
       await syncOrders();
     }

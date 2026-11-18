@@ -203,10 +203,10 @@
           const allReady = order.products.every(p => p.isReady);
           if (allReady) {
             dropCompletedServisOrder(orderId);
-            fetch('/api/notify-adisyo', {
+            fetch('/api/orders', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ orderId: orderId })
+              body: JSON.stringify({ action: 'notify-adisyo', orderId: orderId })
             }).catch(() => {});
           } else {
             // Eğer daha önce düşürüldüyse ama bir ürün geri alındıysa ekranına geri getir
@@ -218,10 +218,10 @@
 
       // Sunucuya bildir (Mutfak ekranına da anında yansır)
       try {
-        await fetch('/api/toggle-ready', {
+        await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: orderId, productId: productId })
+          body: JSON.stringify({ action: 'toggle-ready', productId: productId })
         });
       } catch (e) {
         console.error("Toggle ready hatası:", e);
@@ -237,10 +237,10 @@
       }
 
       try {
-        await fetch('/api/mark-all-ready', {
+        await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: orderId })
+          body: JSON.stringify({ action: 'mark-all-ready', orderId: orderId })
         });
       } catch (e) {
         console.error("Mark all ready hatası:", e);
@@ -509,7 +509,7 @@
       const statusEl = document.getElementById('sync-status');
       if (statusEl) statusEl.textContent = 'Adisyo Taranıyor...';
       try {
-        await fetch('/api/sync-now', { method: 'POST' });
+        await fetch('/api/orders?action=sync-now', { method: 'POST' });
       } catch (e) {}
       await syncOrders();
     }
