@@ -35,3 +35,4 @@ fetch_*.py
 test_*.py
 render_*.py
 *.pdf
+kds_server.py
