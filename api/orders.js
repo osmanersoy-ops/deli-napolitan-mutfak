@@ -254,6 +254,75 @@ module.exports = async function handler(req, res) {
   const body = req.body || {};
   const action = req.query?.action || body?.action;
 
+  // 0. WEBHOOK HANDLER: Adisyo anlık sipariş bildirimi
+  if (url.includes('webhook') || action === 'webhook') {
+    const bodyText = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+    
+    // Adisyo handshake / GET kontrolü
+    if (
+      req.method === 'GET' ||
+      bodyText.toLowerCase().includes('handshake') ||
+      !req.body ||
+      Object.keys(req.body).length === 0
+    ) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.status(200).send('adisyo');
+    }
+
+    try {
+      const payload = req.body;
+      let incomingList = [];
+
+      if (Array.isArray(payload)) {
+        incomingList = payload;
+      } else if (payload?.data && Array.isArray(payload.data)) {
+        incomingList = payload.data;
+      } else if (payload?.data && payload.data.id) {
+        incomingList = [payload.data];
+      } else if (payload?.id && (payload.products || payload.orderNumber)) {
+        incomingList = [payload];
+      } else if (payload?.order && payload.order.id) {
+        incomingList = [payload.order];
+      }
+
+      let hasFullOrder = false;
+      if (incomingList.length > 0) {
+        incomingList.forEach(incoming => {
+          if (!incoming || !incoming.id) return;
+          if (Array.isArray(incoming.products) && incoming.products.length > 0) {
+            hasFullOrder = true;
+          }
+          const idx = cachedOrders.findIndex(o => o.id === incoming.id);
+          if (idx >= 0) {
+            cachedOrders[idx] = incoming;
+          } else {
+            cachedOrders.unshift(incoming);
+          }
+        });
+
+        try {
+          lastSyncTimeString = new Intl.DateTimeFormat('tr-TR', {
+            timeZone: 'Europe/Istanbul',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+          }).format(new Date());
+        } catch (e) {
+          lastSyncTimeString = new Date().toLocaleTimeString('tr-TR');
+        }
+        lastSyncStatus = 'Canlı Webhook Bağlı';
+      }
+
+      // Eğer webhook içinde ürün detayları eksikse hemen tazelemeye izin ver
+      if (!hasFullOrder) {
+        lastFetchTime = 0;
+      }
+    } catch (err) {
+      console.error('[Webhook Error]', err);
+    }
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    return res.status(200).send('adisyo');
+  }
+
   // 1. TOGGLE READY: action === 'toggle-ready' veya body.productId
   if (action === 'toggle-ready' || body.productId) {
     const pid = String(body.productId);
