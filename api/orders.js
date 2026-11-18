@@ -11,7 +11,6 @@ let lastFetchTime = 0;
 let lastSyncTimeString = null;
 let lastSyncStatus = 'Başlatılıyor...';
 let readyProductIds = new Set();
-let inFlightPromise = null;
 
 function normalizeTurkish(text) {
   if (!text) return '';
@@ -115,7 +114,11 @@ function formatOrder(order) {
   const insertDate = order.insertDate || new Date().toISOString();
   let elapsed = 0;
   try {
-    const dt = new Date(insertDate);
+    let dateStr = insertDate;
+    if (!dateStr.includes('+') && !dateStr.includes('Z')) {
+      dateStr += '+03:00';
+    }
+    const dt = new Date(dateStr);
     elapsed = Math.max(0, Math.floor((Date.now() - dt.getTime()) / 1000));
   } catch (e) {
     elapsed = 0;
@@ -140,7 +143,12 @@ function formatOrder(order) {
   };
 }
 
-async function fetchFromAdisyo() {
+async function fetchFromAdisyo(force = false) {
+  const now = Date.now();
+  if (!force && now - lastFetchTime < 25000 && cachedOrders.length > 0) {
+    return cachedOrders;
+  }
+
   const url = `${ADISYO_BASE_URL}/RecentOrders?orderType=TakeAway,Table,Retail&onlyRestaurantCourier=false`;
   try {
     const response = await fetch(url, {
@@ -171,15 +179,29 @@ async function fetchFromAdisyo() {
       }
       lastSyncStatus = 'Canlı Bağlı';
     } else if (text.includes('601')) {
-      // Adisyo kota koruması: en az 25 sn daha bekle
+      // 601 Adisyo kota uyarısı
       lastFetchTime = Date.now() - 5000;
       lastSyncStatus = 'Adisyo kota koruması (30s)';
     }
   } catch (err) {
     console.error('[Adisyo Fetch Error]', err);
-  } finally {
-    inFlightPromise = null;
   }
+
+  return cachedOrders;
+}
+
+function getOrdersPayload() {
+  const formatted = cachedOrders
+    .map(formatOrder)
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
+
+  return {
+    orders: formatted,
+    count: formatted.length,
+    lastSyncTime: lastSyncTimeString || 'Canlı',
+    status: `Bağlı (${formatted.length} bekleyen adisyon)`
+  };
 }
 
 async function handler(req, res) {
@@ -191,33 +213,19 @@ async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Edge cache: 15s cache, 30s stale
-  res.setHeader('Cache-Control', 's-maxage=15, stale-while-revalidate=30');
+  // Edge cache: 12s cache, 25s stale
+  res.setHeader('Cache-Control', 's-maxage=12, stale-while-revalidate=25');
 
   const now = Date.now();
-  // Adisyo 30 sn kota kuralı: en az 28 saniye geçmeli
-  if (now - lastFetchTime > 28000 || cachedOrders.length === 0) {
-    if (!inFlightPromise) {
-      inFlightPromise = fetchFromAdisyo();
-    }
-    // İlk yüklemede Adisyo yanıtını bekle
-    if (cachedOrders.length === 0) {
-      await inFlightPromise;
-    }
+  // Adisyo 30 sn kota kuralı: 26 saniye veya ilk yükleme
+  if (now - lastFetchTime > 26000 || cachedOrders.length === 0) {
+    await fetchFromAdisyo(false);
   }
 
-  const formatted = cachedOrders
-    .map(formatOrder)
-    .filter(Boolean)
-    .sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
-
-  return res.status(200).json({
-    orders: formatted,
-    count: formatted.length,
-    lastSyncTime: lastSyncTimeString || 'Canlı',
-    status: `Bağlı (${formatted.length} bekleyen adisyon)`
-  });
+  return res.status(200).json(getOrdersPayload());
 }
 
 module.exports = handler;
 module.exports.default = handler;
+module.exports.fetchFromAdisyo = fetchFromAdisyo;
+module.exports.getOrdersPayload = getOrdersPayload;
