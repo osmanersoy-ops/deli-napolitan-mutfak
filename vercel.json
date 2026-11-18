@@ -6,9 +6,7 @@
   "rewrites": [
     { "source": "/mutfak", "destination": "/mutfak.html" },
     { "source": "/servis", "destination": "/servis.html" },
-    { "source": "/api/orders/notify-adisyo", "destination": "/api/notify-adisyo" },
-    { "source": "/api/products/toggle-ready", "destination": "/api/toggle-ready" },
-    { "source": "/api/orders/mark-all-ready", "destination": "/api/mark-all-ready" }
+    { "source": "/api/(.*)", "destination": "/api/index.js" }
   ],
   "headers": [
     {
