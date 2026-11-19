@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deli Napolitan - Servis & Expo Ekranı</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse-urgent {
+      0%, 100% { border-color: #ef4444; background-color: #1e1115; }
+      50% { border-color: #dc2626; background-color: #2a1118; }
+    }
+    .card-urgent {
+      animation: pulse-urgent 2s infinite ease-in-out;
+    }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(-16px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .order-enter {
+      animation: slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .order-exit {
+      transform: scale(0.92) translateY(24px);
+      opacity: 0;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    ::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased select-none flex flex-col">
+
+  <!-- TOP BAR -->
+  <header class="px-6 py-3 flex items-center justify-between sticky top-0 z-30 bg-slate-900 border-b border-slate-800 shadow-md">
+    <div class="flex items-center gap-3">
+      <a href="/" title="Ana Sayfaya Dön" class="text-xl font-black text-amber-500 hover:text-amber-400 transition flex items-center gap-2 tracking-tight">
+        <span>🛎️</span> DELI NAPOLITAN
+      </a>
+      <span class="text-xs font-bold text-slate-300 uppercase tracking-wider bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700">
+        Servis & Expo
+      </span>
+      <div class="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/50 px-3 py-1 rounded-full text-emerald-400 text-xs font-bold shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="sync-status">Adisyo Canlı Bağlı</span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2.5">
+      <a href="/mutfak" title="Mutfak Fırın Ekranına Geç" class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition active:scale-95 shadow">
+        <span>🍕</span>
+        <span>Mutfak Ekranı</span>
+      </a>
+      <button onclick="manualSync()" title="Şimdi Yenile" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 text-xs font-bold transition active:scale-95">
+        <span>🔄</span>
+        <span>Yenile</span>
+      </button>
+      <button onclick="toggleSound()" id="sound-btn" title="Sesli Bildirim" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 text-xs font-bold transition active:scale-95">
+        <span id="sound-icon">🔔</span>
+        <span id="sound-text">Ses Açık</span>
+      </button>
+      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 rounded-lg text-white text-xs font-bold transition active:scale-95 shadow">
+        <span>⛶</span>
+        <span>Tam Ekran</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN KDS GRID -->
+  <main class="flex-1 px-6 py-6 overflow-y-auto">
+    <div id="orders-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 items-start">
+      <!-- Tüm ürünleriyle adisyon kartları buraya basılır -->
+    </div>
+
+    <!-- Boş Durum -->
+    <div id="empty-state" class="hidden text-center py-36">
+      <div class="text-7xl mb-3">🛎️</div>
+      <h3 class="text-2xl font-black text-slate-200">Bekleyen Servis Adisyonu Yok</h3>
+      <p class="text-sm text-slate-400 mt-1">Adisyo'dan sipariş girildiğinde buraya anında düşecektir.</p>
+    </div>
+  </main>
+
+  <script>
+    let soundEnabled = true;
+    let orders = [];
+    let previousOrderIds = new Set();
+    let isFirstLoad = true;
+    let lastRenderSignature = null;
+    const localReadyOverrides = new Map();
+    const renderedCardIds = new Set();
+    const dismissedOrders = new Set();
+
+    function playKitchenChime() {
+      if (!soundEnabled) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume();
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(659.25, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.8);
+      } catch (e) {}
+    }
+
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    function getOrderSeconds(order) {
+      if (!order.insertDate) return 0;
+      try {
+        let dateStr = order.insertDate;
+        if (!dateStr.includes('+') && !dateStr.includes('Z')) {
+          dateStr += '+03:00';
+        }
+        const dt = new Date(dateStr);
+        return Math.max(0, Math.floor((Date.now() - dt.getTime()) / 1000));
+      } catch (e) {
+        return order.secondsElapsed || 0;
+      }
+    }
+
+    function getCategoryBadge(catName, isPizza) {
+      const c = (catName || '').toLowerCase();
+      if (isPizza || c.includes('pizza')) {
+        return { label: 'Pizza', icon: '🍕', badgeClass: 'bg-rose-950 text-rose-300 border-rose-800' };
+      }
+      if (c.includes('içecek') || c.includes('icecek') || c.includes('mesrubat') || c.includes('kahve') || c.includes('su') || c.includes('bira')) {
+        return { label: 'İçecek', icon: '🥤', badgeClass: 'bg-blue-950 text-blue-300 border-blue-800' };
+      }
+      if (c.includes('salata')) {
+        return { label: 'Salata', icon: '🥗', badgeClass: 'bg-emerald-950 text-emerald-300 border-emerald-800' };
+      }
+      if (c.includes('tatlı') || c.includes('tatli') || c.includes('pasta')) {
+        return { label: 'Tatlı', icon: '🍰', badgeClass: 'bg-amber-950 text-amber-300 border-amber-800' };
+      }
+      return { label: catName || 'Yan Ürün', icon: '🍽️', badgeClass: 'bg-slate-800 text-slate-300 border-slate-700' };
+    }
+
+    function computeOrdersSignature(ordersList) {
+      return ordersList.map(o => {
+        const pSig = (o.products || []).map(p => `${p.id}:${p.isReady ? 1 : 0}`).join(',');
+        return `${o.id}_${pSig}`;
+      }).join('|');
+    }
+
+    // ==========================================
+    // 1. ÜRÜN HAZIR BUTONU (Tek Tek Hazırla)
+    // ==========================================
+    async function toggleProductReady(orderId, productId) {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+      const product = (order.products || []).find(p => String(p.id) === String(productId));
+      if (!product) return;
+
+      const newReadyState = !product.isReady;
+      product.isReady = newReadyState;
+
+      // 15 saniyelik yerel kilit (Optimistic Lock)
+      localReadyOverrides.set(String(productId), {
+        isReady: newReadyState,
+        timestamp: Date.now()
+      });
+
+      renderOrders();
+
+      // Sunucuya bildir (Mutfak ekranına anında yansısın)
+      try {
+        await fetch('/api/orders?action=toggle-ready', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId, isReady: newReadyState })
+        });
+      } catch (e) {}
+    }
+
+    // ==========================================
+    // 2. MASA ADI YANINDAKİ "TÜMÜ HAZIR" BUTONU
+    // (Adisyo'da masayı mavi yapar ve mutfaktan düşürür!)
+    // ==========================================
+    async function markAllOrderReady(orderId) {
+      const card = document.getElementById(`servis-card-${orderId}`);
+      if (card) {
+        card.classList.add('order-exit');
+      }
+
+      dismissedOrders.add(orderId);
+
+      setTimeout(() => {
+        orders = orders.filter(o => o.id !== orderId);
+        renderOrders();
+      }, 350);
+
+      // Adisyo'ya resmi Prepared komutu gönder (Adisyo mutfağından düşer & masa mavi olur!)
+      try {
+        await fetch('/api/orders?action=mark-all-ready', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId })
+        });
+      } catch (e) {
+        console.error('Mark all ready error:', e);
+      }
+
+      setTimeout(syncOrders, 800);
+    }
+
+    // ==========================================
+    // KARTLARI ÇİZ
+    // ==========================================
+    function renderOrders() {
+      const container = document.getElementById('orders-grid');
+      const emptyState = document.getElementById('empty-state');
+
+      const visibleOrders = orders.filter(o => !dismissedOrders.has(o.id));
+
+      if (!visibleOrders || visibleOrders.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      container.innerHTML = visibleOrders.map((order) => {
+        const elapsed = getOrderSeconds(order);
+        const isUrgent = elapsed >= 540;
+        const isNew = !renderedCardIds.has(order.id);
+        renderedCardIds.add(order.id);
+
+        const totalItems = (order.products || []).length;
+        const readyItems = (order.products || []).filter(p => p.isReady).length;
+        const isAllReady = totalItems > 0 && readyItems === totalItems;
+
+        let orderTypeBadge = '';
+        if (order.orderType === 'PAKET') {
+          orderTypeBadge = '<span class="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-purple-900/90 text-purple-200 border border-purple-700">PAKET</span>';
+        } else if (order.orderType === 'GEL-AL') {
+          orderTypeBadge = '<span class="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-cyan-900/90 text-cyan-200 border border-cyan-700">GEL-AL</span>';
+        }
+
+        return `
+          <div 
+            id="servis-card-${order.id}" 
+            class="bg-slate-900 rounded-2xl border-2 transition-all shadow-xl flex flex-col justify-between overflow-hidden ${
+              isAllReady 
+                ? 'border-emerald-600/70 bg-emerald-950/20' 
+                : isUrgent 
+                  ? 'border-red-600 card-urgent' 
+                  : 'border-slate-800 hover:border-slate-700'
+            } ${isNew ? 'order-enter' : ''}"
+          >
+            <!-- BAŞLIK: MASA ADI VE YANINDA BÜYÜK "TÜMÜ HAZIR" BUTONU -->
+            <div class="p-4 bg-slate-850 border-b border-slate-800">
+              <div class="flex items-center justify-between gap-2.5">
+                
+                <!-- SOL: Masa Adı & Adisyon No -->
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-baseline gap-2 flex-wrap">
+                    <h2 class="text-2xl md:text-3xl font-black text-white tracking-tight leading-none">
+                      ${order.tableName}
+                    </h2>
+                    <span class="text-lg font-bold text-slate-400">
+                      #${order.orderNumber}
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1.5">
+                    ${orderTypeBadge}
+                    ${order.waiterName ? `<span class="text-xs text-slate-400 font-semibold truncate">👤 ${order.waiterName}</span>` : ''}
+                  </div>
+                </div>
+
+                <!-- SAĞ: MASA ADI YANINDAKİ "TÜMÜ HAZIR" BUTONU (ADİSYO'YU DÜŞÜRÜR) -->
+                <div class="flex-shrink-0 flex items-center gap-2">
+                  <button 
+                    onclick="markAllOrderReady(${order.id})" 
+                    title="Adisyo'da masayı hazır yap ve ekrandan düşür"
+                    class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition active:scale-95 shadow-md flex items-center gap-1.5 border border-emerald-400/50"
+                  >
+                    <span>✓</span>
+                    <span>Tümü Hazır</span>
+                  </button>
+                </div>
+
+              </div>
+
+              <!-- İlerleme Çubuğu -->
+              <div class="mt-3 flex items-center justify-between text-xs text-slate-400 font-bold border-t border-slate-800/80 pt-2">
+                <span class="${isAllReady ? 'text-emerald-400' : ''}">
+                  ${isAllReady ? '✓ TÜM ÜRÜNLER HAZIR' : `Hazırlık: ${readyItems} / ${totalItems}`}
+                </span>
+                <span id="timer-${order.id}" class="text-xs px-2 py-0.5 rounded font-mono font-bold ${
+                  elapsed >= 540 ? 'bg-red-950 text-red-300 border border-red-700 animate-pulse' : elapsed >= 240 ? 'bg-amber-950 text-amber-300 border border-amber-700' : 'bg-slate-800 text-slate-300'
+                }">
+                  ⏱ ${formatTime(elapsed)}
+                </span>
+              </div>
+            </div>
+
+            <!-- TÜM ÜRÜNLER LİSTESİ (PİZZA, İÇECEK, SALATA, TATLI) -->
+            <div class="p-4 space-y-2.5 flex-1 bg-slate-900/60">
+              ${(order.products || []).map((item) => {
+                const isReady = item.isReady;
+                const cat = getCategoryBadge(item.category, item.isPizza);
+
+                return `
+                  <div class="p-2.5 rounded-xl border transition-all ${
+                    isReady 
+                      ? 'bg-emerald-950/40 border-emerald-600/50' 
+                      : 'bg-slate-850/80 border-slate-800 hover:border-slate-700'
+                  }">
+                    <div class="flex items-center justify-between gap-3">
+                      
+                      <!-- SOL: ÜRÜN BİLGİSİ -->
+                      <div class="flex items-start gap-2.5 flex-1 min-w-0">
+                        <span class="text-base font-black px-2 py-0.5 rounded-lg flex-shrink-0 ${
+                          isReady 
+                            ? 'bg-emerald-900/50 text-emerald-300 border border-emerald-700/60 line-through' 
+                            : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                        }">
+                          ${item.qty}x
+                        </span>
+
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${cat.badgeClass}">
+                              ${cat.icon} ${cat.label}
+                            </span>
+                            <span class="text-sm font-bold leading-tight ${
+                              isReady ? 'line-through text-slate-400' : 'text-white'
+                            }">
+                              ${item.name}
+                            </span>
+                          </div>
+
+                          ${item.note ? `
+                            <div class="mt-1 inline-flex items-center gap-1 bg-rose-950 border border-rose-800 text-rose-300 px-2 py-0.5 rounded text-[11px] font-black">
+                              <span>⚠️</span>
+                              <span>${item.note}</span>
+                            </div>
+                          ` : ''}
+                        </div>
+                      </div>
+
+                      <!-- SAĞ: TEK TEK "HAZIR" BUTONU -->
+                      <div class="flex-shrink-0">
+                        <button 
+                          onclick="toggleProductReady(${order.id}, '${item.id}')"
+                          class="px-3 py-1.5 rounded-xl font-black text-xs transition active:scale-95 flex items-center gap-1 shadow-sm ${
+                            isReady 
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                              : 'bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-300 border border-slate-700 hover:border-emerald-600'
+                          }"
+                        >
+                          <span>${isReady ? '✓ Hazır' : 'Hazır'}</span>
+                        </button>
+                      </div>
+
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function syncOrders() {
+      try {
+        const res = await fetch('/api/orders?_t=' + Date.now(), {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
+        if (!res.ok) throw new Error('API Hatası');
+        const data = await res.json();
+        const serverOrders = data.orders || [];
+
+        const currentIds = new Set(serverOrders.map(o => o.id));
+
+        let hasNewOrder = false;
+        serverOrders.forEach(so => {
+          if (!previousOrderIds.has(so.id) && !isFirstLoad) {
+            hasNewOrder = true;
+          }
+        });
+
+        if (hasNewOrder) {
+          playKitchenChime();
+        }
+
+        dismissedOrders.forEach(dismissedId => {
+          if (!currentIds.has(dismissedId)) {
+            dismissedOrders.delete(dismissedId);
+          }
+        });
+        renderedCardIds.forEach(renderedId => {
+          if (!currentIds.has(renderedId)) {
+            renderedCardIds.delete(renderedId);
+          }
+        });
+
+        const now = Date.now();
+        serverOrders.forEach(so => {
+          so.secondsElapsed = getOrderSeconds(so);
+          (so.products || []).forEach(p => {
+            const pid = String(p.id);
+            if (localReadyOverrides.has(pid)) {
+              const item = localReadyOverrides.get(pid);
+              if (now - item.timestamp < 15000) {
+                p.isReady = item.isReady;
+              } else {
+                localReadyOverrides.delete(pid);
+              }
+            }
+          });
+        });
+
+        const statusEl = document.getElementById('sync-status');
+        if (statusEl) {
+          const visibleCount = serverOrders.filter(o => !dismissedOrders.has(o.id)).length;
+          const syncTime = data.lastSyncTime || 'Canlı';
+          statusEl.textContent = `Adisyo Canlı (${visibleCount} Masa • ${syncTime})`;
+        }
+
+        const newSig = computeOrdersSignature(serverOrders);
+        const dataChanged = (newSig !== lastRenderSignature);
+
+        orders = serverOrders;
+        previousOrderIds = currentIds;
+        isFirstLoad = false;
+
+        if (dataChanged) {
+          lastRenderSignature = newSig;
+          renderOrders();
+        }
+      } catch (e) {
+        const statusEl = document.getElementById('sync-status');
+        if (statusEl) {
+          statusEl.textContent = 'Bağlantı Bekleniyor...';
+        }
+      }
+    }
+
+    syncOrders();
+    setInterval(syncOrders, 1500);
+
+    setInterval(() => {
+      orders.forEach(order => {
+        const elapsed = getOrderSeconds(order);
+        order.secondsElapsed = elapsed;
+        const timerEl = document.getElementById(`timer-${order.id}`);
+        if (timerEl) {
+          timerEl.textContent = `⏱ ${formatTime(elapsed)}`;
+        }
+      });
+    }, 1000);
+
+    async function manualSync() {
+      const statusEl = document.getElementById('sync-status');
+      if (statusEl) statusEl.textContent = 'Adisyo Taranıyor...';
+      try {
+        await fetch('/api/orders?action=sync-now', { method: 'POST' });
+      } catch (e) {}
+      await syncOrders();
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const icon = document.getElementById('sound-icon');
+      const text = document.getElementById('sound-text');
+      if (soundEnabled) {
+        icon.textContent = '🔔';
+        text.textContent = 'Ses Açık';
+        playKitchenChime();
+      } else {
+        icon.textContent = '🔕';
+        text.textContent = 'Sessiz';
+      }
+    }
+
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+  </script>
+</body>
+</html>

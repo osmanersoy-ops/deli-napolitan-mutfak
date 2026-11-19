@@ -4,7 +4,8 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/mutfak", "destination": "/index.html" },
+    { "source": "/mutfak", "destination": "/mutfak.html" },
+    { "source": "/servis", "destination": "/servis.html" },
     { "source": "/api/webhook", "destination": "/api/orders" },
     { "source": "/api/orders", "destination": "/api/orders" }
   ],

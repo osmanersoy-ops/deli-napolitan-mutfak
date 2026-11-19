@@ -35,13 +35,13 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased select-none flex flex-col">
 
-  <!-- TOP BAR: Marka, Canlı Durum ve Kontroller -->
+  <!-- TOP BAR -->
   <header class="px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 bg-slate-900 border-b border-slate-800 shadow-lg">
     <div class="flex items-center gap-4">
-      <div class="flex items-center gap-2">
+      <a href="/" title="Ana Sayfaya Dön" class="flex items-center gap-2 hover:opacity-80 transition">
         <span class="text-2xl">🍕</span>
         <span class="text-xl font-black text-amber-500 tracking-tight">DELI NAPOLITAN</span>
-      </div>
+      </a>
       <span class="text-xs font-black text-slate-300 uppercase tracking-widest bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">
         Mutfak Ekranı
       </span>
@@ -51,11 +51,15 @@
       </div>
     </div>
 
-    <!-- Kontroller: Manuel Yenile, Ses, Tam Ekran -->
+    <!-- Kontroller -->
     <div class="flex items-center gap-3">
       <div id="pizza-counter-badge" class="px-3.5 py-1.5 bg-rose-950/80 border border-rose-800 rounded-xl text-rose-300 text-xs font-black tracking-wide">
         Bekleyen: <span id="total-pizzas-count" class="text-white text-sm">0</span> Pizza
       </div>
+      <a href="/servis" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-black transition active:scale-95 shadow">
+        <span>🛎️</span>
+        <span>Servis Ekranı</span>
+      </a>
       <button onclick="manualSync()" title="Şimdi Yenile" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-200 text-xs font-bold transition active:scale-95">
         <span>🔄</span>
         <span>Yenile</span>
@@ -64,7 +68,7 @@
         <span id="sound-icon">🔔</span>
         <span id="sound-text">Ses Açık</span>
       </button>
-      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 rounded-xl text-white text-xs font-black transition active:scale-95 shadow">
+      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-850 hover:bg-slate-800 border border-slate-700 rounded-xl text-white text-xs font-black transition active:scale-95 shadow">
         <span>⛶</span>
         <span>Tam Ekran</span>
       </button>
@@ -74,7 +78,7 @@
   <!-- ANA KDS ALANI: Sağdan sola akış (Yeni sipariş sol başta) -->
   <main class="flex-1 px-6 py-6 overflow-y-auto">
     <div id="orders-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 items-start">
-      <!-- Pizza adisyon kartları en yeni sol başta olacak şekilde buraya basılır -->
+      <!-- Pizza adisyon kartları sol başta olacak şekilde buraya basılır -->
     </div>
 
     <!-- Boş Durum (Bekleyen Pizza Yok) -->
@@ -93,21 +97,19 @@
     let lastRenderSignature = null;
     const renderedCardIds = new Set();
 
-    // Ses Bildirimi (AudioContext ile fırın gong / zil sesi)
+    // Ses Bildirimi (AudioContext ile fırın gong sesi)
     function playKitchenChime() {
       if (!soundEnabled) return;
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        if (ctx.state === 'suspended') {
-          ctx.resume();
-        }
+        if (ctx.state === 'suspended') ctx.resume();
         const now = ctx.currentTime;
 
         const osc1 = ctx.createOscillator();
         const gain1 = ctx.createGain();
         osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(587.33, now); // D5
-        osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+        osc1.frequency.setValueAtTime(587.33, now);
+        osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15);
         gain1.gain.setValueAtTime(0.35, now);
         gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
         osc1.connect(gain1);
@@ -119,7 +121,7 @@
         const gain2 = ctx.createGain();
         osc2.type = 'triangle';
         osc2.frequency.setValueAtTime(880, now + 0.18);
-        osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.35); // D6
+        osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.35);
         gain2.gain.setValueAtTime(0.3, now + 0.18);
         gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
         osc2.connect(gain2);
@@ -129,14 +131,12 @@
       } catch (e) {}
     }
 
-    // Sayaç biçimlendirme (mm:ss)
     function formatTime(seconds) {
       const mins = Math.floor(seconds / 60);
       const secs = seconds % 60;
       return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     }
 
-    // Siparişin başlangıç tarihinden geçen süreyi akıcı hesapla
     function getOrderSeconds(order) {
       if (!order.insertDate) return 0;
       try {
@@ -151,10 +151,7 @@
       }
     }
 
-    // SAYAÇ RENK KURALLARI:
-    // 0 - 4 dk (0-240s): YEŞİL
-    // 4 - 9 dk (240-540s): SARI
-    // 9+ dk (>540s): KIRMIZI
+    // Sayaç Renkleri: 0-4 dk yeşil, 4-9 dk sarı, 9+ dk kırmızı
     function getTimerBadgeClass(seconds) {
       if (seconds < 240) {
         return 'bg-emerald-600 text-white border-emerald-500';
@@ -165,24 +162,30 @@
       }
     }
 
-    // Titreme önleyici imza karşılaştırması
+    // İmzaya hazır olan pizzaları da ekle (Servis ekranından hazır basılınca Mutfak anında görsün!)
     function computeOrdersSignature(ordersList) {
-      return ordersList.map(o => `${o.id}_${o.pizzas ? o.pizzas.length : 0}`).join('|');
+      return ordersList.map(o => {
+        const readySig = (o.pizzas || []).map(p => `${p.id}:${p.isReady ? 1 : 0}`).join(',');
+        return `${o.id}_${readySig}`;
+      }).join('|');
     }
 
-    // SİPARİŞ KARTLARINI ÇİZ
     function renderOrders() {
       const container = document.getElementById('orders-grid');
       const emptyState = document.getElementById('empty-state');
       const totalPizzasEl = document.getElementById('total-pizzas-count');
 
+      // Sadece içinde pizza olan adisyonları mutfak ekranına bas
+      const kitchenOrders = orders.filter(o => o.pizzas && o.pizzas.length > 0);
+
       let grandTotalPizzas = 0;
-      orders.forEach(o => {
-        grandTotalPizzas += (o.pizzaCount || (o.pizzas ? o.pizzas.length : 0));
+      kitchenOrders.forEach(o => {
+        const pending = (o.pizzas || []).filter(p => !p.isReady).length;
+        grandTotalPizzas += pending;
       });
       if (totalPizzasEl) totalPizzasEl.textContent = grandTotalPizzas;
 
-      if (!orders || orders.length === 0) {
+      if (!kitchenOrders || kitchenOrders.length === 0) {
         container.innerHTML = '';
         emptyState.classList.remove('hidden');
         return;
@@ -190,14 +193,13 @@
 
       emptyState.classList.add('hidden');
 
-      container.innerHTML = orders.map((order) => {
+      container.innerHTML = kitchenOrders.map((order) => {
         const elapsed = getOrderSeconds(order);
         const timerClass = getTimerBadgeClass(elapsed);
-        const isUrgent = elapsed >= 540; // 9 dakikadan sonra acil kırmızı
+        const isUrgent = elapsed >= 540;
         const isNew = !renderedCardIds.has(order.id);
         renderedCardIds.add(order.id);
 
-        // Sipariş Tipi Rozeti
         let orderTypeBadge = '';
         if (order.orderType === 'PAKET') {
           orderTypeBadge = '<span class="px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-purple-900/90 text-purple-200 border border-purple-700">PAKET</span>';
@@ -205,7 +207,6 @@
           orderTypeBadge = '<span class="px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-cyan-900/90 text-cyan-200 border border-cyan-700">GEL-AL</span>';
         }
 
-        // Giriş saati
         let timeStr = '';
         try {
           const dt = new Date(order.insertDate);
@@ -214,18 +215,23 @@
           timeStr = '';
         }
 
+        const isAllPizzasReady = order.allPizzasReady;
+
         return `
           <div 
             id="order-card-${order.id}" 
             class="bg-slate-900 rounded-2xl border-2 transition-all shadow-xl flex flex-col justify-between overflow-hidden ${
-              isUrgent ? 'border-red-600 card-urgent' : 'border-slate-800 hover:border-slate-700'
+              isAllPizzasReady 
+                ? 'border-emerald-600/70 bg-emerald-950/20' 
+                : isUrgent 
+                  ? 'border-red-600 card-urgent' 
+                  : 'border-slate-800 hover:border-slate-700'
             } ${isNew ? 'order-new-enter' : ''}"
           >
-            <!-- KART ÜST BAŞLIĞI: MASA ADI (ÇOK BÜYÜK), ADİSYON NO (BİR PARÇA KÜÇÜK) VE SAYAÇ -->
+            <!-- KART ÜST BAŞLIĞI: MASA ADI (ÇOK BÜYÜK), ADİSYON NO (BİR PARÇA KÜÇÜK) -->
             <div class="p-4 bg-slate-850 border-b border-slate-800">
               <div class="flex items-start justify-between gap-3">
                 
-                <!-- SOL: Masa Adı (Çok Büyük) & Adisyon No (Bir parça küçük) -->
                 <div class="min-w-0 flex-1">
                   <div class="flex items-baseline gap-2.5 flex-wrap">
                     <h2 class="text-3xl md:text-4xl font-black text-white tracking-tight leading-none drop-shadow-sm">
@@ -251,7 +257,7 @@
                   </div>
                 </div>
 
-                <!-- SAĞ: CANLI SAYAÇ ROZETİ (0-4 dk yeşil, 4-9 dk sarı, 9+ dk kırmızı) -->
+                <!-- SAYAÇ ROZETİ -->
                 <div class="flex-shrink-0">
                   <span 
                     id="timer-${order.id}" 
@@ -264,38 +270,61 @@
               </div>
             </div>
 
-            <!-- PİZZA LİSTESİ: KATEGORİ YOK, FIRINDA YOK, YALNIZCA NET PİZZALAR -->
+            <!-- PİZZA LİSTESİ: KATEGORİ YOK, FIRINDA YOK, SERVİSTE HAZIRLANAN ÜSTÜ ÇİZİLİ -->
             <div class="p-4 space-y-3 flex-1 bg-slate-900/60">
-              ${(order.pizzas || []).map((pizza) => `
-                <div class="p-3 bg-slate-850/80 rounded-xl border border-slate-800 flex items-start gap-3">
-                  <!-- ADET (ÇOK BÜYÜK VE NET) -->
-                  <span class="text-2xl font-black px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30 flex-shrink-0 leading-none">
-                    ${pizza.qty}x
-                  </span>
+              ${(order.pizzas || []).map((pizza) => {
+                const isReady = pizza.isReady;
 
-                  <!-- PİZZA İSMİ VE NOTLAR -->
-                  <div class="min-w-0 flex-1">
-                    <div class="text-xl font-bold text-white leading-snug tracking-tight">
-                      ${pizza.name}
-                    </div>
+                return `
+                  <div class="p-3 rounded-xl border transition-all flex items-start gap-3 ${
+                    isReady 
+                      ? 'bg-emerald-950/40 border-emerald-600/50' 
+                      : 'bg-slate-850/80 border-slate-800'
+                  }">
+                    <!-- ADET -->
+                    <span class="text-2xl font-black px-2.5 py-1 rounded-lg flex-shrink-0 leading-none ${
+                      isReady 
+                        ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/60 line-through' 
+                        : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                    }">
+                      ${pizza.qty}x
+                    </span>
 
-                    <!-- ÖZEL NOT / İSTEK (VARSA ÇOK BELİRGİN) -->
-                    ${pizza.note ? `
-                      <div class="mt-1.5 inline-flex items-center gap-1.5 bg-rose-950 border border-rose-700 text-rose-200 px-2.5 py-1 rounded-lg text-xs font-black tracking-wide">
-                        <span>⚠️</span>
-                        <span>${pizza.note}</span>
+                    <!-- PİZZA İSMİ VE NOTLAR -->
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-xl font-bold leading-snug tracking-tight ${
+                          isReady ? 'text-slate-400 line-through' : 'text-white'
+                        }">
+                          ${pizza.name}
+                        </span>
+                        ${isReady ? `
+                          <span class="text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            ✓ Çıktı
+                          </span>
+                        ` : ''}
                       </div>
-                    ` : ''}
+
+                      <!-- ÖZEL NOT -->
+                      ${pizza.note ? `
+                        <div class="mt-1.5 inline-flex items-center gap-1.5 bg-rose-950 border border-rose-700 text-rose-200 px-2.5 py-1 rounded-lg text-xs font-black tracking-wide">
+                          <span>⚠️</span>
+                          <span>${pizza.note}</span>
+                        </div>
+                      ` : ''}
+                    </div>
                   </div>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
 
-            <!-- KART ALTI: TOPLAM PİZZA SAYISI -->
+            <!-- KART ALTI: DURUM VE TOPLAM -->
             <div class="px-4 py-2.5 bg-slate-950/80 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 font-bold">
-              <span>Bu Adisyon:</span>
+              <span>
+                ${isAllPizzasReady ? '<span class="text-emerald-400 font-black">✓ Tüm Pizzalar Servise Çıktı</span>' : 'Fırın Akışı:'}
+              </span>
               <span class="text-amber-400 font-black text-sm">
-                🍕 ${order.pizzaCount || order.pizzas.length} Pizza
+                🍕 ${(order.pizzas || []).length} Pizza
               </span>
             </div>
 
@@ -304,16 +333,11 @@
       }).join('');
     }
 
-    // SENKRONİZASYON (Her 1.5 saniyede bir tarayıcı önbelleksiz kontrol)
     async function syncOrders() {
       try {
-        // Önbellek engellemek için dinamik zaman damgası ve cache: no-store
         const res = await fetch('/api/orders?_t=' + Date.now(), {
           cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
         });
         if (!res.ok) throw new Error('API Hatası');
         const data = await res.json();
@@ -321,7 +345,6 @@
 
         const currentIds = new Set(serverOrders.map(o => o.id));
 
-        // Yeni sipariş tespiti (sol başa yeni sipariş geldiğinde zil çal)
         let hasNewOrder = false;
         serverOrders.forEach(so => {
           if (!previousOrderIds.has(so.id) && !isFirstLoad) {
@@ -333,21 +356,18 @@
           playKitchenChime();
         }
 
-        // Kapanan siparişleri temizle
         renderedCardIds.forEach(id => {
           if (!currentIds.has(id)) {
             renderedCardIds.delete(id);
           }
         });
 
-        // Durum bilgisini güncelle
         const statusEl = document.getElementById('sync-status');
         if (statusEl) {
           const syncTime = data.lastSyncTime || 'Canlı';
           statusEl.textContent = `Adisyo Canlı (${serverOrders.length} Masa • ${syncTime})`;
         }
 
-        // TİTREME ÖNLEYİCİ: Sadece veri gerçekten değiştiyse DOM'u baştan çiz
         const newSig = computeOrdersSignature(serverOrders);
         const dataChanged = (newSig !== lastRenderSignature);
 
@@ -367,11 +387,9 @@
       }
     }
 
-    // İlk yükleme ve 1.5 saniyelik periyodik anlık sorgulama
     syncOrders();
     setInterval(syncOrders, 1500);
 
-    // Canlı sayaç güncellemesi (Her saniye pürüzsüz)
     setInterval(() => {
       orders.forEach(order => {
         const elapsed = getOrderSeconds(order);
@@ -382,10 +400,6 @@
         if (timerEl) {
           timerEl.textContent = `⏱ ${formatTime(elapsed)}`;
           
-          // Sayaç Renkleri:
-          // 0 - 4 dk: Yeşil
-          // 4 - 9 dk: Sarı
-          // 9+ dk: Kırmızı
           if (elapsed >= 540) {
             if (!timerEl.classList.contains('bg-red-600')) {
               timerEl.className = "px-3.5 py-1.5 rounded-xl border text-base tracking-wider transition-colors shadow-md font-black inline-block text-center min-w-[76px] bg-red-600 text-white border-red-500 animate-pulse";
@@ -407,7 +421,6 @@
       });
     }, 1000);
 
-    // Manuel Yenileme Butonu
     async function manualSync() {
       const statusEl = document.getElementById('sync-status');
       if (statusEl) statusEl.textContent = 'Adisyo Taranıyor...';
@@ -417,7 +430,6 @@
       await syncOrders();
     }
 
-    // Ses Aç / Kapat
     function toggleSound() {
       soundEnabled = !soundEnabled;
       const icon = document.getElementById('sound-icon');
@@ -432,7 +444,6 @@
       }
     }
 
-    // Tam Ekran Modu
     function toggleFullScreen() {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(err => console.log(err));
