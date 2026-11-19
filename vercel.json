@@ -1,4 +1,8 @@
 {
   "version": 2,
-  "cleanUrls": true
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/mutfak", "destination": "/index.html" },
+    { "source": "/api/orders", "destination": "/api/orders" }
+  ]
 }
