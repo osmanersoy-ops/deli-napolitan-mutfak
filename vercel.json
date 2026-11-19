@@ -5,6 +5,7 @@
   "trailingSlash": false,
   "rewrites": [
     { "source": "/mutfak", "destination": "/index.html" },
+    { "source": "/api/webhook", "destination": "/api/orders" },
     { "source": "/api/orders", "destination": "/api/orders" }
   ],
   "headers": [

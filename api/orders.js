@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 const ADISYO_BASE_URL = process.env.ADISYO_BASE_URL || 'https://ext.adisyo.com/api/External/v2';
 const ADISYO_API_KEY = process.env.ADISYO_API_KEY || '25b80b3556ca3a15353dd2fd312062fad27adcf5a1de51b75bdadea1fa8214ab';
 const ADISYO_API_SECRET = process.env.ADISYO_API_SECRET || '65e70574-2b17-42a1-b093-4128ad9aff44';
@@ -12,6 +14,29 @@ let lastFetchTime = 0;
 let lastSyncTimeString = null;
 let lastSyncStatus = 'Başlatılıyor...';
 let isFetching = false;
+
+const CACHE_FILE = '/tmp/kds_cached_orders.json';
+
+// Yerel /tmp disk önbelleğini yükle
+function loadDiskCache() {
+  try {
+    if (fs.existsSync(CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+      if (Array.isArray(data) && data.length > 0 && cachedOrders.length === 0) {
+        cachedOrders = data;
+      }
+    }
+  } catch (e) {}
+}
+
+// Yerel /tmp disk önbelleğine kaydet
+function saveDiskCache() {
+  try {
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(cachedOrders), 'utf8');
+  } catch (e) {}
+}
+
+loadDiskCache();
 
 function normalizeTurkish(text) {
   if (!text) return '';
@@ -127,10 +152,33 @@ function formatOrderForKitchen(order) {
   };
 }
 
+// Tek bir siparişi ID ile Adisyo'dan çek (Limit: 1 saniyede 4 çağrı - Webhook için optimize)
+async function fetchOrderById(orderId) {
+  try {
+    const url = `${ADISYO_BASE_URL}/Order/${orderId}`;
+    const res = await fetch(url, {
+      headers: {
+        'x-api-key': ADISYO_API_KEY,
+        'x-api-secret': ADISYO_API_SECRET,
+        'x-api-consumer': ADISYO_API_CONSUMER,
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Deli-Napolitan-Kitchen-Display)'
+      }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      return json.data || json;
+    }
+  } catch (e) {
+    console.error('[fetchOrderById Error]', e);
+  }
+  return null;
+}
+
+// Arka plan yedek tarama (En az 25 saniye aralıkla)
 async function fetchFromAdisyo(force = false) {
   const now = Date.now();
 
-  // ADİSYO KURALI: En az 25 saniye geçmeden istek atılmaz (Kota koruması)
   if (!force && now - lastFetchTime < 25000) {
     return cachedOrders;
   }
@@ -156,18 +204,17 @@ async function fetchFromAdisyo(force = false) {
 
     if (response.ok && Array.isArray(data.data)) {
       cachedOrders = data.data;
+      saveDiskCache();
       lastFetchTime = Date.now();
       try {
         lastSyncTimeString = new Intl.DateTimeFormat('tr-TR', {
           timeZone: 'Europe/Istanbul',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
         }).format(new Date());
       } catch (e) {
         lastSyncTimeString = new Date().toLocaleTimeString('tr-TR');
       }
-      lastSyncStatus = 'Canlı Bağlı';
+      lastSyncStatus = 'Canlı Webhook & API Bağlı';
     } else if (text.includes('601')) {
       lastFetchTime = Date.now();
       lastSyncStatus = 'Adisyo kota koruması (25s)';
@@ -182,12 +229,12 @@ async function fetchFromAdisyo(force = false) {
 }
 
 function getKitchenOrdersPayload() {
+  loadDiskCache();
   const formatted = cachedOrders
     .map(formatOrderForKitchen)
     .filter(Boolean);
 
-  // KURAL: "yeni sipariş ekranın solunda sol başa gelsin"
-  // Bu yüzden tarihe göre azalan (en yeni ilk sırada / sol başta) sıralanır!
+  // KURAL: Yeni sipariş ekranın solunda sol başa gelsin (En yeni ilk sırada)
   formatted.sort((a, b) => new Date(b.insertDate) - new Date(a.insertDate));
 
   return {
@@ -204,7 +251,7 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Anti-cache headers
+  // Anti-cache headers (Tarayıcı ve ara sunucu önbelleğini engelle)
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
@@ -214,17 +261,117 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const action = req.query?.action || req.body?.action;
+  loadDiskCache();
 
-  // Manuel anlık yenileme isteği
+  const url = req.url || '';
+  const body = req.body || {};
+  const action = req.query?.action || body?.action;
+
+  // ==========================================
+  // 1. WEBHOOK ALICISI (Adisyo Anlık Bildirim)
+  // ==========================================
+  if (url.includes('webhook') || action === 'webhook') {
+    const bodyText = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+
+    // Adisyo Handshake / Doğrulama Kontrolü (Adisyo panelinden eklerken 'adisyo' yanıtı bekler)
+    if (
+      req.method === 'GET' ||
+      bodyText.toLowerCase().includes('handshake') ||
+      !req.body ||
+      Object.keys(req.body).length === 0
+    ) {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.status(200).send('adisyo');
+    }
+
+    try {
+      const payload = req.body;
+      let incomingList = [];
+
+      if (Array.isArray(payload)) {
+        incomingList = payload;
+      } else if (payload?.data && Array.isArray(payload.data)) {
+        incomingList = payload.data;
+      } else if (payload?.data && (payload.data.id || payload.data.orderId)) {
+        incomingList = [payload.data];
+      } else if (payload?.order && (payload.order.id || payload.order.orderId)) {
+        incomingList = [payload.order];
+      } else if (payload?.id || payload?.orderId) {
+        incomingList = [payload];
+      }
+
+      for (let incoming of incomingList) {
+        const orderId = incoming.id || incoming.orderId;
+        if (!orderId) continue;
+
+        // Sipariş hazırlandı veya kapandıysa kuyruktan derhal düşür
+        const statusStr = normalizeTurkish(incoming.status || '');
+        const statusId = incoming.statusId || 0;
+        const isFinished = (
+          incoming.preparedDate != null ||
+          statusId === 3 ||
+          statusId === 5 ||
+          statusStr.includes('hazırlandı') ||
+          statusStr.includes('kapan') ||
+          statusStr.includes('iptal')
+        );
+
+        if (isFinished) {
+          cachedOrders = cachedOrders.filter(o => o.id !== orderId);
+          saveDiskCache();
+          continue;
+        }
+
+        // Eğer webhook gövdesinde ürün detayları yoksa tekil API ile anında çek
+        if (!Array.isArray(incoming.products) || incoming.products.length === 0) {
+          const fullOrder = await fetchOrderById(orderId);
+          if (fullOrder && fullOrder.id) {
+            incoming = fullOrder;
+          }
+        }
+
+        // Kuyruğu güncelle veya sol başa yeni sipariş olarak ekle
+        const idx = cachedOrders.findIndex(o => o.id === orderId);
+        if (idx >= 0) {
+          cachedOrders[idx] = incoming;
+        } else {
+          cachedOrders.unshift(incoming);
+        }
+      }
+
+      saveDiskCache();
+
+      try {
+        lastSyncTimeString = new Intl.DateTimeFormat('tr-TR', {
+          timeZone: 'Europe/Istanbul',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }).format(new Date());
+      } catch (e) {
+        lastSyncTimeString = new Date().toLocaleTimeString('tr-TR');
+      }
+      lastSyncStatus = 'Canlı Webhook Bağlı';
+    } catch (err) {
+      console.error('[Webhook Processing Error]', err);
+    }
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    return res.status(200).send('adisyo');
+  }
+
+  // ==========================================
+  // 2. MANUEL YENİLEME (sync-now)
+  // ==========================================
   if (action === 'sync-now') {
     await fetchFromAdisyo(true);
     return res.status(200).json(getKitchenOrdersPayload());
   }
 
-  // Normal periyodik sorgulama
+  // ==========================================
+  // 3. MUTFAK EKRANI SORGULAMA (GET /api/orders)
+  // ==========================================
   const now = Date.now();
-  if (now - lastFetchTime >= 25000) {
+  // Arka planda 25 saniyede bir genel tarama (Webhook kaçırılırsa emniyet kilidi)
+  if (now - lastFetchTime >= 25000 || cachedOrders.length === 0) {
     await fetchFromAdisyo(false);
   }
 
