@@ -1,8 +1,27 @@
 {
-  "version": 2,
+  "framework": null,
+  "outputDirectory": "public",
   "cleanUrls": true,
+  "trailingSlash": false,
   "rewrites": [
     { "source": "/mutfak", "destination": "/index.html" },
     { "source": "/api/orders", "destination": "/api/orders" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,POST,PUT,PATCH,DELETE" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    }
   ]
 }
