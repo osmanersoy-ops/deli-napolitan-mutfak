@@ -7,8 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @keyframes pulse-red {
-      0%, 100% { border-color: #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
-      50% { border-color: #b91c1c; box-shadow: 0 0 35px rgba(220, 38, 38, 0.7); }
+      0%, 100% { border-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.35); }
+      50% { border-color: #b91c1c; box-shadow: 0 0 25px rgba(220, 38, 38, 0.6); }
     }
     .card-urgent {
       animation: pulse-red 1.6s infinite ease-in-out;
@@ -25,50 +25,50 @@
       width: 8px;
     }
     ::-webkit-scrollbar-thumb {
-      background: #334155;
+      background: #cbd5e1;
       border-radius: 4px;
     }
     ::-webkit-scrollbar-track {
-      background: #0f172a;
+      background: #f1f5f9;
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased select-none flex flex-col">
+<body class="bg-slate-100 text-slate-900 min-h-screen font-sans antialiased select-none flex flex-col">
 
-  <!-- TOP BAR -->
-  <header class="px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 bg-slate-900 border-b border-slate-800 shadow-lg">
+  <!-- TOP BAR (BEYAZ TEMA) -->
+  <header class="px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
     <div class="flex items-center gap-4">
       <a href="/" title="Ana Sayfaya Dön" class="flex items-center gap-2 hover:opacity-80 transition">
         <span class="text-2xl">🍕</span>
-        <span class="text-xl font-black text-amber-500 tracking-tight">DELI NAPOLITAN</span>
+        <span class="text-xl font-black text-amber-600 tracking-tight">DELI NAPOLITAN</span>
       </a>
-      <span class="text-xs font-black text-slate-300 uppercase tracking-widest bg-slate-800 px-3 py-1 rounded-lg border border-slate-700">
+      <span class="text-xs font-black text-slate-700 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-lg border border-slate-300">
         Mutfak Ekranı
       </span>
-      <div class="flex items-center gap-2 bg-emerald-950/90 border border-emerald-500/50 px-3 py-1 rounded-full text-emerald-400 text-xs font-bold shadow-sm">
-        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+      <div class="flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-3 py-1 rounded-full text-emerald-800 text-xs font-bold shadow-xs">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
         <span id="sync-status">Adisyo Canlı Webhook</span>
       </div>
     </div>
 
     <!-- Kontroller -->
     <div class="flex items-center gap-3">
-      <div id="pizza-counter-badge" class="px-3.5 py-1.5 bg-rose-950/80 border border-rose-800 rounded-xl text-rose-300 text-xs font-black tracking-wide">
-        Bekleyen: <span id="total-pizzas-count" class="text-white text-sm">0</span> Pizza
+      <div id="pizza-counter-badge" class="px-3.5 py-1.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-black tracking-wide">
+        Bekleyen: <span id="total-pizzas-count" class="text-rose-900 text-sm">0</span> Pizza
       </div>
-      <a href="/servis" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-black transition active:scale-95 shadow">
+      <a href="/servis" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-black transition active:scale-95 shadow-sm">
         <span>🛎️</span>
         <span>Servis Ekranı</span>
       </a>
-      <button onclick="manualSync()" title="Şimdi Yenile" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-200 text-xs font-bold transition active:scale-95">
+      <button onclick="manualSync()" title="Şimdi Yenile" class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
         <span>🔄</span>
         <span>Yenile</span>
       </button>
-      <button onclick="toggleSound()" id="sound-btn" title="Sesli Uyarı Aç/Kapat" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-200 text-xs font-bold transition active:scale-95">
+      <button onclick="toggleSound()" id="sound-btn" title="Sesli Uyarı Aç/Kapat" class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
         <span id="sound-icon">🔔</span>
         <span id="sound-text">Ses Açık</span>
       </button>
-      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-850 hover:bg-slate-800 border border-slate-700 rounded-xl text-white text-xs font-black transition active:scale-95 shadow">
+      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-black transition active:scale-95 shadow-sm">
         <span>⛶</span>
         <span>Tam Ekran</span>
       </button>
@@ -84,8 +84,8 @@
     <!-- Boş Durum (Bekleyen Pizza Yok) -->
     <div id="empty-state" class="hidden text-center py-36">
       <div class="text-7xl mb-4">🍕</div>
-      <h3 class="text-3xl font-black text-slate-200">Bekleyen Pizza Siparişi Yok</h3>
-      <p class="text-base text-slate-400 mt-2 font-medium">Yeni sipariş girildiğinde ekranın sol başına anında otomatik düşecektir.</p>
+      <h3 class="text-3xl font-black text-slate-800">Bekleyen Pizza Siparişi Yok</h3>
+      <p class="text-base text-slate-500 mt-2 font-medium">Yeni sipariş girildiğinde ekranın sol başına anında otomatik düşecektir.</p>
     </div>
   </main>
 
@@ -154,11 +154,11 @@
     // Sayaç Renkleri: 0-4 dk yeşil, 4-9 dk sarı, 9+ dk kırmızı
     function getTimerBadgeClass(seconds) {
       if (seconds < 240) {
-        return 'bg-emerald-600 text-white border-emerald-500';
+        return 'bg-emerald-600 text-white border-emerald-700 shadow-sm';
       } else if (seconds < 540) {
-        return 'bg-amber-500 text-slate-950 border-amber-400 font-black';
+        return 'bg-amber-400 text-amber-950 border-amber-500 font-black shadow-sm';
       } else {
-        return 'bg-red-600 text-white border-red-500 animate-pulse font-black';
+        return 'bg-red-600 text-white border-red-700 animate-pulse font-black shadow-md';
       }
     }
 
@@ -202,9 +202,9 @@
 
         let orderTypeBadge = '';
         if (order.orderType === 'PAKET') {
-          orderTypeBadge = '<span class="px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-purple-900/90 text-purple-200 border border-purple-700">PAKET</span>';
+          orderTypeBadge = '<span class="px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-300">PAKET</span>';
         } else if (order.orderType === 'GEL-AL') {
-          orderTypeBadge = '<span class="px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-cyan-900/90 text-cyan-200 border border-cyan-700">GEL-AL</span>';
+          orderTypeBadge = '<span class="px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider bg-cyan-100 text-cyan-800 border border-cyan-300">GEL-AL</span>';
         }
 
         let timeStr = '';
@@ -220,24 +220,24 @@
         return `
           <div 
             id="order-card-${order.id}" 
-            class="bg-slate-900 rounded-2xl border-2 transition-all shadow-xl flex flex-col justify-between overflow-hidden ${
+            class="bg-white rounded-2xl border-2 transition-all shadow-md hover:shadow-lg flex flex-col justify-between overflow-hidden ${
               isAllPizzasReady 
-                ? 'border-emerald-600/70 bg-emerald-950/20' 
+                ? 'border-emerald-500 bg-emerald-50/30' 
                 : isUrgent 
-                  ? 'border-red-600 card-urgent' 
-                  : 'border-slate-800 hover:border-slate-700'
+                  ? 'border-red-500 card-urgent' 
+                  : 'border-slate-200 hover:border-slate-300'
             } ${isNew ? 'order-new-enter' : ''}"
           >
             <!-- KART ÜST BAŞLIĞI: MASA ADI (ÇOK BÜYÜK), ADİSYON NO (BİR PARÇA KÜÇÜK) -->
-            <div class="p-4 bg-slate-850 border-b border-slate-800">
+            <div class="p-4 bg-slate-50 border-b border-slate-200">
               <div class="flex items-start justify-between gap-3">
                 
                 <div class="min-w-0 flex-1">
                   <div class="flex items-baseline gap-2.5 flex-wrap">
-                    <h2 class="text-3xl md:text-4xl font-black text-white tracking-tight leading-none drop-shadow-sm">
+                    <h2 class="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none">
                       ${order.tableName}
                     </h2>
-                    <span class="text-xl md:text-2xl font-black text-slate-400">
+                    <span class="text-xl md:text-2xl font-bold text-slate-500">
                       #${order.orderNumber}
                     </span>
                   </div>
@@ -245,7 +245,7 @@
                   <div class="flex items-center gap-2 mt-2">
                     ${orderTypeBadge}
                     ${order.waiterName ? `
-                      <span class="text-xs text-slate-400 font-semibold truncate">
+                      <span class="text-xs text-slate-600 font-semibold truncate">
                         👤 ${order.waiterName}
                       </span>
                     ` : ''}
@@ -261,7 +261,7 @@
                 <div class="flex-shrink-0">
                   <span 
                     id="timer-${order.id}" 
-                    class="px-3.5 py-1.5 rounded-xl border text-base tracking-wider transition-colors shadow-md font-black inline-block text-center min-w-[76px] ${timerClass}"
+                    class="px-3.5 py-1.5 rounded-xl border text-base tracking-wider transition-colors shadow-sm font-black inline-block text-center min-w-[76px] ${timerClass}"
                   >
                     ⏱ ${formatTime(elapsed)}
                   </span>
@@ -271,21 +271,21 @@
             </div>
 
             <!-- PİZZA LİSTESİ: KATEGORİ YOK, FIRINDA YOK, SERVİSTE HAZIRLANAN ÜSTÜ ÇİZİLİ -->
-            <div class="p-4 space-y-3 flex-1 bg-slate-900/60">
+            <div class="p-4 space-y-3 flex-1 bg-white">
               ${(order.pizzas || []).map((pizza) => {
                 const isReady = pizza.isReady;
 
                 return `
                   <div class="p-3 rounded-xl border transition-all flex items-start gap-3 ${
                     isReady 
-                      ? 'bg-emerald-950/40 border-emerald-600/50' 
-                      : 'bg-slate-850/80 border-slate-800'
+                      ? 'bg-emerald-50/70 border-emerald-300' 
+                      : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
                   }">
                     <!-- ADET -->
                     <span class="text-2xl font-black px-2.5 py-1 rounded-lg flex-shrink-0 leading-none ${
                       isReady 
-                        ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/60 line-through' 
-                        : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 line-through' 
+                        : 'bg-amber-100 text-amber-900 border border-amber-300'
                     }">
                       ${pizza.qty}x
                     </span>
@@ -294,12 +294,12 @@
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center justify-between gap-2">
                         <span class="text-xl font-bold leading-snug tracking-tight ${
-                          isReady ? 'text-slate-400 line-through' : 'text-white'
+                          isReady ? 'text-slate-400 line-through' : 'text-slate-900'
                         }">
                           ${pizza.name}
                         </span>
                         ${isReady ? `
-                          <span class="text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          <span class="text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
                             ✓ Çıktı
                           </span>
                         ` : ''}
@@ -307,7 +307,7 @@
 
                       <!-- ÖZEL NOT -->
                       ${pizza.note ? `
-                        <div class="mt-1.5 inline-flex items-center gap-1.5 bg-rose-950 border border-rose-700 text-rose-200 px-2.5 py-1 rounded-lg text-xs font-black tracking-wide">
+                        <div class="mt-1.5 inline-flex items-center gap-1.5 bg-rose-50 border border-rose-300 text-rose-800 px-2.5 py-1 rounded-lg text-xs font-black tracking-wide">
                           <span>⚠️</span>
                           <span>${pizza.note}</span>
                         </div>
@@ -319,11 +319,11 @@
             </div>
 
             <!-- KART ALTI: DURUM VE TOPLAM -->
-            <div class="px-4 py-2.5 bg-slate-950/80 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400 font-bold">
+            <div class="px-4 py-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 font-bold">
               <span>
-                ${isAllPizzasReady ? '<span class="text-emerald-400 font-black">✓ Tüm Pizzalar Servise Çıktı</span>' : 'Fırın Akışı:'}
+                ${isAllPizzasReady ? '<span class="text-emerald-700 font-black">✓ Tüm Pizzalar Servise Çıktı</span>' : 'Fırın Akışı:'}
               </span>
-              <span class="text-amber-400 font-black text-sm">
+              <span class="text-amber-700 font-black text-sm">
                 🍕 ${(order.pizzas || []).length} Pizza
               </span>
             </div>
@@ -402,19 +402,19 @@
           
           if (elapsed >= 540) {
             if (!timerEl.classList.contains('bg-red-600')) {
-              timerEl.className = "px-3.5 py-1.5 rounded-xl border text-base tracking-wider transition-colors shadow-md font-black inline-block text-center min-w-[76px] bg-red-600 text-white border-red-500 animate-pulse";
+              timerEl.className = "px-3.5 py-1.5 rounded-xl border text-base tracking-wider transition-colors shadow-md font-black inline-block text-center min-w-[76px] bg-red-600 text-white border-red-700 animate-pulse";
             }
             if (cardEl && !cardEl.classList.contains('card-urgent')) {
-              cardEl.classList.add('border-red-600', 'card-urgent');
-              cardEl.classList.remove('border-slate-800');
+              cardEl.classList.add('border-red-500', 'card-urgent');
+              cardEl.classList.remove('border-slate-200');
             }
           } else if (elapsed >= 240) {
-            if (!timerEl.classList.contains('bg-amber-500')) {
-              timerEl.className = "px-3.5 py-1.5 rounded-xl border text-base tracking-wider transition-colors shadow-md font-black inline-block text-center min-w-[76px] bg-amber-500 text-slate-950 border-amber-400";
+            if (!timerEl.classList.contains('bg-amber-400')) {
+              timerEl.className = "px-3.5 py-1.5 rounded-xl border text-base tracking-wider transition-colors shadow-sm font-black inline-block text-center min-w-[76px] bg-amber-400 text-amber-950 border-amber-500";
             }
           } else {
             if (!timerEl.classList.contains('bg-emerald-600')) {
-              timerEl.className = "px-3.5 py-1.5 rounded-xl border text-base tracking-wider transition-colors shadow-md font-black inline-block text-center min-w-[76px] bg-emerald-600 text-white border-emerald-500";
+              timerEl.className = "px-3.5 py-1.5 rounded-xl border text-base tracking-wider transition-colors shadow-sm font-black inline-block text-center min-w-[76px] bg-emerald-600 text-white border-emerald-700";
             }
           }
         }

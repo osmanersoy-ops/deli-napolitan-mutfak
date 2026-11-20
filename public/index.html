@@ -6,22 +6,22 @@
   <title>Deli Napolitan - Operasyon İstasyon Seçimi</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased flex flex-col justify-between selection:bg-rose-500 selection:text-white">
+<body class="bg-slate-100 text-slate-900 min-h-screen font-sans antialiased flex flex-col justify-between selection:bg-rose-500 selection:text-white">
 
   <!-- TOP HEADER -->
-  <header class="px-6 py-5 border-b border-slate-800 flex items-center justify-between">
+  <header class="px-6 py-5 bg-white border-b border-slate-200 shadow-sm flex items-center justify-between">
     <div class="flex items-center gap-3">
       <span class="text-3xl">🍕</span>
       <div>
-        <h1 class="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+        <h1 class="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
           DELI NAPOLITAN
         </h1>
-        <p class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Adisyo Entegre Canlı KDS Sistemi</p>
+        <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Adisyo Entegre Canlı KDS Sistemi</p>
       </div>
     </div>
 
     <!-- Live Status Indicator -->
-    <div class="flex items-center gap-2.5 bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs font-bold text-slate-300">
+    <div class="flex items-center gap-2.5 bg-emerald-50 border border-emerald-300 px-4 py-2 rounded-xl text-xs font-bold text-emerald-800 shadow-xs">
       <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
       <span id="sync-text">Adisyo Canlı Bağlantı</span>
     </div>
@@ -31,13 +31,13 @@
   <main class="flex-1 max-w-5xl mx-auto w-full px-6 py-12 flex flex-col justify-center items-center">
     
     <div class="text-center mb-10">
-      <span class="text-xs font-extrabold uppercase tracking-widest text-amber-500 bg-amber-500/10 px-3.5 py-1.5 rounded-full border border-amber-500/20">
+      <span class="text-xs font-black uppercase tracking-widest text-amber-800 bg-amber-100 px-3.5 py-1.5 rounded-full border border-amber-300">
         İstasyon Seçimi
       </span>
-      <h2 class="text-3xl md:text-4xl font-black text-white mt-3 tracking-tight">
+      <h2 class="text-3xl md:text-4xl font-black text-slate-900 mt-3 tracking-tight">
         Kullanmak İstediğiniz Ekranı Seçin
       </h2>
-      <p class="text-sm md:text-base text-slate-400 mt-2 max-w-xl mx-auto">
+      <p class="text-sm md:text-base text-slate-600 mt-2 max-w-xl mx-auto font-medium">
         Tabletin veya ekranın bulunduğu istasyona göre ilgili paneli açın.
       </p>
     </div>
@@ -46,42 +46,42 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
       
       <!-- CARD 1: MUTFAK EKRANI (FIRIN) -->
-      <a href="/mutfak" class="group relative flex flex-col justify-between bg-slate-900 hover:bg-slate-850 border-2 border-slate-800 hover:border-rose-500 rounded-3xl p-8 md:p-10 transition-all duration-300 hover:shadow-2xl hover:shadow-rose-950/50 hover:-translate-y-1 text-left">
+      <a href="/mutfak" class="group relative flex flex-col justify-between bg-white hover:bg-rose-50/20 border-2 border-slate-200 hover:border-rose-500 rounded-3xl p-8 md:p-10 transition-all duration-300 shadow-sm hover:shadow-xl hover:-translate-y-1 text-left">
         <div>
           <div class="flex items-center justify-between mb-6">
-            <div class="w-16 h-16 rounded-2xl bg-rose-600/15 border border-rose-500/30 flex items-center justify-center text-4xl group-hover:scale-110 transition-transform">
+            <div class="w-16 h-16 rounded-2xl bg-rose-100 border border-rose-300 flex items-center justify-center text-4xl group-hover:scale-110 transition-transform">
               🍕
             </div>
-            <span class="text-xs font-black uppercase tracking-wider bg-rose-950 text-rose-300 border border-rose-800/60 px-3 py-1 rounded-full">
+            <span class="text-xs font-black uppercase tracking-wider bg-rose-50 text-rose-800 border border-rose-200 px-3 py-1 rounded-full">
               Fırın Ekranı
             </span>
           </div>
 
-          <h3 class="text-3xl font-black text-white group-hover:text-rose-400 transition-colors">
+          <h3 class="text-3xl font-black text-slate-900 group-hover:text-rose-600 transition-colors">
             Mutfak Ekranı
           </h3>
-          <p class="text-sm text-slate-400 mt-2 leading-relaxed">
+          <p class="text-sm text-slate-600 mt-2 leading-relaxed">
             Pizza ustaları için özel ekran. Sadece pizzalar akar, yeni sipariş sol başa düşer.
           </p>
 
-          <ul class="mt-6 space-y-2.5 text-xs text-slate-300 font-medium border-t border-slate-800/80 pt-5">
+          <ul class="mt-6 space-y-2.5 text-xs text-slate-700 font-semibold border-t border-slate-200 pt-5">
             <li class="flex items-center gap-2">
-              <span class="text-rose-500 font-bold">✓</span> Yalnızca pizza çeşitleri (içecek vb. gizlenir)
+              <span class="text-rose-600 font-black">✓</span> Yalnızca pizza çeşitleri (içecek vb. gizlenir)
             </li>
             <li class="flex items-center gap-2">
-              <span class="text-rose-500 font-bold">✓</span> Sayaç: 0-4 dk yeşil, 4-9 dk sarı, 9+ dk kırmızı
+              <span class="text-rose-600 font-black">✓</span> Sayaç: 0-4 dk yeşil, 4-9 dk sarı, 9+ dk kırmızı
             </li>
             <li class="flex items-center gap-2">
-              <span class="text-rose-500 font-bold">✓</span> Serviste "Hazır" basılan pizzanın üstü çizilir
+              <span class="text-rose-600 font-black">✓</span> Serviste "Hazır" basılan pizzanın üstü çizilir
             </li>
             <li class="flex items-center gap-2">
-              <span class="text-rose-500 font-bold">✓</span> Tüm pizzalar bitince otomatik düşer
+              <span class="text-rose-600 font-black">✓</span> Tüm pizzalar bitince otomatik düşer
             </li>
           </ul>
         </div>
 
         <div class="mt-8 pt-4">
-          <div class="w-full py-4 bg-rose-600 group-hover:bg-rose-500 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 transition shadow-lg shadow-rose-900/40">
+          <div class="w-full py-4 bg-rose-600 group-hover:bg-rose-500 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 transition shadow-md shadow-rose-600/20">
             <span>Mutfak Ekranını Aç</span>
             <span class="group-hover:translate-x-1 transition-transform">→</span>
           </div>
@@ -89,42 +89,42 @@
       </a>
 
       <!-- CARD 2: SERVİS EKRANI (EXPO) -->
-      <a href="/servis" class="group relative flex flex-col justify-between bg-slate-900 hover:bg-slate-850 border-2 border-slate-800 hover:border-amber-500 rounded-3xl p-8 md:p-10 transition-all duration-300 hover:shadow-2xl hover:shadow-amber-950/50 hover:-translate-y-1 text-left">
+      <a href="/servis" class="group relative flex flex-col justify-between bg-white hover:bg-amber-50/20 border-2 border-slate-200 hover:border-amber-500 rounded-3xl p-8 md:p-10 transition-all duration-300 shadow-sm hover:shadow-xl hover:-translate-y-1 text-left">
         <div>
           <div class="flex items-center justify-between mb-6">
-            <div class="w-16 h-16 rounded-2xl bg-amber-600/15 border border-amber-500/30 flex items-center justify-center text-4xl group-hover:scale-110 transition-transform">
+            <div class="w-16 h-16 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-4xl group-hover:scale-110 transition-transform">
               🛎️
             </div>
-            <span class="text-xs font-black uppercase tracking-wider bg-amber-950 text-amber-300 border border-amber-800/60 px-3 py-1 rounded-full">
+            <span class="text-xs font-black uppercase tracking-wider bg-amber-50 text-amber-900 border border-amber-200 px-3 py-1 rounded-full">
               Expo & Salon
             </span>
           </div>
 
-          <h3 class="text-3xl font-black text-white group-hover:text-amber-400 transition-colors">
+          <h3 class="text-3xl font-black text-slate-900 group-hover:text-amber-600 transition-colors">
             Servis Ekranı
           </h3>
-          <p class="text-sm text-slate-400 mt-2 leading-relaxed">
+          <p class="text-sm text-slate-600 mt-2 leading-relaxed">
             Garson ve salon personeli için tam adisyon ekranı.
           </p>
 
-          <ul class="mt-6 space-y-2.5 text-xs text-slate-300 font-medium border-t border-slate-800/80 pt-5">
+          <ul class="mt-6 space-y-2.5 text-xs text-slate-700 font-semibold border-t border-slate-200 pt-5">
             <li class="flex items-center gap-2">
-              <span class="text-amber-500 font-bold">✓</span> <strong class="text-white">Tüm Ürünler:</strong> Pizza, içecek, salata, tatlı
+              <span class="text-amber-600 font-black">✓</span> <strong class="text-slate-900">Tüm Ürünler:</strong> Pizza, içecek, salata, tatlı
             </li>
             <li class="flex items-center gap-2">
-              <span class="text-amber-500 font-bold">✓</span> Ürünlerin yanında tek tek <strong class="text-white">"Hazır"</strong> butonu
+              <span class="text-amber-600 font-black">✓</span> Ürünlerin yanında tek tek <strong class="text-slate-900">"Hazır"</strong> butonu
             </li>
             <li class="flex items-center gap-2">
-              <span class="text-amber-500 font-bold">✓</span> Masa adının yanında <strong class="text-white">"✓ Tümü Hazır"</strong> butonu
+              <span class="text-amber-600 font-black">✓</span> Masa adının yanında <strong class="text-slate-900">"✓ Tümü Hazır"</strong> butonu
             </li>
             <li class="flex items-center gap-2">
-              <span class="text-amber-500 font-bold">✓</span> Tümü Hazır'a basınca <strong class="text-emerald-400">Adisyo'da masa maviye döner ve düşer</strong>
+              <span class="text-amber-600 font-black">✓</span> Tümü Hazır'a basınca <strong class="text-emerald-700">Adisyo'da masa maviye döner ve düşer</strong>
             </li>
           </ul>
         </div>
 
         <div class="mt-8 pt-4">
-          <div class="w-full py-4 bg-amber-600 group-hover:bg-amber-500 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 transition shadow-lg shadow-amber-900/40">
+          <div class="w-full py-4 bg-amber-600 group-hover:bg-amber-500 text-white rounded-2xl font-black text-base flex items-center justify-center gap-2 transition shadow-md shadow-amber-600/20">
             <span>Servis Ekranını Aç</span>
             <span class="group-hover:translate-x-1 transition-transform">→</span>
           </div>
@@ -136,32 +136,17 @@
   </main>
 
   <!-- FOOTER -->
-  <footer class="px-6 py-4 border-t border-slate-800 bg-slate-950/80 text-xs text-slate-400 flex flex-col md:flex-row items-center justify-between gap-3">
+  <footer class="px-6 py-4 border-t border-slate-200 bg-white text-xs text-slate-500 flex flex-col md:flex-row items-center justify-between gap-3">
     <div>
-      <span class="font-bold text-slate-300">Deli Napolitan KDS Sistemi</span> &bull; 
-      <span>Webhook: <code class="bg-slate-900 px-2 py-0.5 rounded text-emerald-400 font-mono font-bold">/api/webhook</code></span>
+      <span class="font-bold text-slate-700">Deli Napolitan KDS Sistemi</span> &bull; 
+      <span>Webhook: <code class="bg-slate-100 px-2 py-0.5 rounded text-emerald-700 font-mono font-bold border border-slate-200">/api/webhook</code></span>
     </div>
-    <div class="flex items-center gap-4 text-slate-400 font-semibold">
-      <a href="/mutfak" class="hover:text-rose-400 transition">🍕 /mutfak</a>
+    <div class="flex items-center gap-4 text-slate-600 font-semibold">
+      <a href="/mutfak" class="hover:text-rose-600 transition">🍕 /mutfak</a>
       <span>&bull;</span>
-      <a href="/servis" class="hover:text-amber-400 transition">🛎️ /servis</a>
+      <a href="/servis" class="hover:text-amber-600 transition">🛎️ /servis</a>
     </div>
   </footer>
 
-  <script>
-    async function checkStatus() {
-      try {
-        const res = await fetch('/api/orders?_t=' + Date.now(), { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          document.getElementById('sync-text').textContent = `Adisyo Canlı (${data.count} Bekleyen Masa)`;
-        }
-      } catch (e) {
-        document.getElementById('sync-text').textContent = 'Bağlantı Bekleniyor...';
-      }
-    }
-    checkStatus();
-    setInterval(checkStatus, 4000);
-  </script>
 </body>
 </html>

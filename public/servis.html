@@ -7,8 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @keyframes pulse-urgent {
-      0%, 100% { border-color: #ef4444; background-color: #1e1115; }
-      50% { border-color: #dc2626; background-color: #2a1118; }
+      0%, 100% { border-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.35); }
+      50% { border-color: #dc2626; box-shadow: 0 0 25px rgba(220, 38, 38, 0.6); }
     }
     .card-urgent {
       animation: pulse-urgent 2s infinite ease-in-out;
@@ -30,45 +30,45 @@
       width: 6px;
     }
     ::-webkit-scrollbar-thumb {
-      background: #334155;
+      background: #cbd5e1;
       border-radius: 4px;
     }
     ::-webkit-scrollbar-track {
-      background: #0f172a;
+      background: #f1f5f9;
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased select-none flex flex-col">
+<body class="bg-slate-100 text-slate-900 min-h-screen font-sans antialiased select-none flex flex-col">
 
-  <!-- TOP BAR -->
-  <header class="px-6 py-3 flex items-center justify-between sticky top-0 z-30 bg-slate-900 border-b border-slate-800 shadow-md">
+  <!-- TOP BAR (BEYAZ TEMA) -->
+  <header class="px-6 py-3 flex items-center justify-between sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
     <div class="flex items-center gap-3">
-      <a href="/" title="Ana Sayfaya Dön" class="text-xl font-black text-amber-500 hover:text-amber-400 transition flex items-center gap-2 tracking-tight">
+      <a href="/" title="Ana Sayfaya Dön" class="text-xl font-black text-amber-600 hover:text-amber-500 transition flex items-center gap-2 tracking-tight">
         <span>🛎️</span> DELI NAPOLITAN
       </a>
-      <span class="text-xs font-bold text-slate-300 uppercase tracking-wider bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700">
+      <span class="text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-100 px-2.5 py-1 rounded-md border border-slate-300">
         Servis & Expo
       </span>
-      <div class="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/50 px-3 py-1 rounded-full text-emerald-400 text-xs font-bold shadow-sm">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <div class="flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-3 py-1 rounded-full text-emerald-800 text-xs font-bold shadow-xs">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
         <span id="sync-status">Adisyo Canlı Bağlı</span>
       </div>
     </div>
 
     <div class="flex items-center gap-2.5">
-      <a href="/mutfak" title="Mutfak Fırın Ekranına Geç" class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition active:scale-95 shadow">
+      <a href="/mutfak" title="Mutfak Fırın Ekranına Geç" class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition active:scale-95 shadow-sm">
         <span>🍕</span>
         <span>Mutfak Ekranı</span>
       </a>
-      <button onclick="manualSync()" title="Şimdi Yenile" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 text-xs font-bold transition active:scale-95">
+      <button onclick="manualSync()" title="Şimdi Yenile" class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
         <span>🔄</span>
         <span>Yenile</span>
       </button>
-      <button onclick="toggleSound()" id="sound-btn" title="Sesli Bildirim" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 text-xs font-bold transition active:scale-95">
+      <button onclick="toggleSound()" id="sound-btn" title="Sesli Bildirim" class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
         <span id="sound-icon">🔔</span>
         <span id="sound-text">Ses Açık</span>
       </button>
-      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 rounded-lg text-white text-xs font-bold transition active:scale-95 shadow">
+      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-900 rounded-lg text-white text-xs font-bold transition active:scale-95 shadow-sm">
         <span>⛶</span>
         <span>Tam Ekran</span>
       </button>
@@ -84,8 +84,8 @@
     <!-- Boş Durum -->
     <div id="empty-state" class="hidden text-center py-36">
       <div class="text-7xl mb-3">🛎️</div>
-      <h3 class="text-2xl font-black text-slate-200">Bekleyen Servis Adisyonu Yok</h3>
-      <p class="text-sm text-slate-400 mt-1">Adisyo'dan sipariş girildiğinde buraya anında düşecektir.</p>
+      <h3 class="text-2xl font-black text-slate-800">Bekleyen Servis Adisyonu Yok</h3>
+      <p class="text-sm text-slate-500 mt-1">Adisyo'dan sipariş girildiğinde buraya anında düşecektir.</p>
     </div>
   </main>
 
@@ -142,18 +142,18 @@
     function getCategoryBadge(catName, isPizza) {
       const c = (catName || '').toLowerCase();
       if (isPizza || c.includes('pizza')) {
-        return { label: 'Pizza', icon: '🍕', badgeClass: 'bg-rose-950 text-rose-300 border-rose-800' };
+        return { label: 'Pizza', icon: '🍕', badgeClass: 'bg-rose-50 text-rose-800 border-rose-200' };
       }
       if (c.includes('içecek') || c.includes('icecek') || c.includes('mesrubat') || c.includes('kahve') || c.includes('su') || c.includes('bira')) {
-        return { label: 'İçecek', icon: '🥤', badgeClass: 'bg-blue-950 text-blue-300 border-blue-800' };
+        return { label: 'İçecek', icon: '🥤', badgeClass: 'bg-blue-50 text-blue-800 border-blue-200' };
       }
       if (c.includes('salata')) {
-        return { label: 'Salata', icon: '🥗', badgeClass: 'bg-emerald-950 text-emerald-300 border-emerald-800' };
+        return { label: 'Salata', icon: '🥗', badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
       }
       if (c.includes('tatlı') || c.includes('tatli') || c.includes('pasta')) {
-        return { label: 'Tatlı', icon: '🍰', badgeClass: 'bg-amber-950 text-amber-300 border-amber-800' };
+        return { label: 'Tatlı', icon: '🍰', badgeClass: 'bg-amber-50 text-amber-900 border-amber-200' };
       }
-      return { label: catName || 'Yan Ürün', icon: '🍽️', badgeClass: 'bg-slate-800 text-slate-300 border-slate-700' };
+      return { label: catName || 'Yan Ürün', icon: '🍽️', badgeClass: 'bg-slate-100 text-slate-700 border-slate-300' };
     }
 
     function computeOrdersSignature(ordersList) {
@@ -225,7 +225,7 @@
     }
 
     // ==========================================
-    // KARTLARI ÇİZ
+    // KARTLARI ÇİZ (BEYAZ TEMA)
     // ==========================================
     function renderOrders() {
       const container = document.getElementById('orders-grid');
@@ -253,39 +253,39 @@
 
         let orderTypeBadge = '';
         if (order.orderType === 'PAKET') {
-          orderTypeBadge = '<span class="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-purple-900/90 text-purple-200 border border-purple-700">PAKET</span>';
+          orderTypeBadge = '<span class="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-300">PAKET</span>';
         } else if (order.orderType === 'GEL-AL') {
-          orderTypeBadge = '<span class="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-cyan-900/90 text-cyan-200 border border-cyan-700">GEL-AL</span>';
+          orderTypeBadge = '<span class="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-cyan-100 text-cyan-800 border border-cyan-300">GEL-AL</span>';
         }
 
         return `
           <div 
             id="servis-card-${order.id}" 
-            class="bg-slate-900 rounded-2xl border-2 transition-all shadow-xl flex flex-col justify-between overflow-hidden ${
+            class="bg-white rounded-2xl border-2 transition-all shadow-md hover:shadow-lg flex flex-col justify-between overflow-hidden ${
               isAllReady 
-                ? 'border-emerald-600/70 bg-emerald-950/20' 
+                ? 'border-emerald-500 bg-emerald-50/30' 
                 : isUrgent 
-                  ? 'border-red-600 card-urgent' 
-                  : 'border-slate-800 hover:border-slate-700'
+                  ? 'border-red-500 card-urgent' 
+                  : 'border-slate-200 hover:border-slate-300'
             } ${isNew ? 'order-enter' : ''}"
           >
             <!-- BAŞLIK: MASA ADI VE YANINDA BÜYÜK "TÜMÜ HAZIR" BUTONU -->
-            <div class="p-4 bg-slate-850 border-b border-slate-800">
+            <div class="p-4 bg-slate-50 border-b border-slate-200">
               <div class="flex items-center justify-between gap-2.5">
                 
                 <!-- SOL: Masa Adı & Adisyon No -->
                 <div class="min-w-0 flex-1">
                   <div class="flex items-baseline gap-2 flex-wrap">
-                    <h2 class="text-2xl md:text-3xl font-black text-white tracking-tight leading-none">
+                    <h2 class="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-none">
                       ${order.tableName}
                     </h2>
-                    <span class="text-lg font-bold text-slate-400">
+                    <span class="text-lg font-bold text-slate-500">
                       #${order.orderNumber}
                     </span>
                   </div>
                   <div class="flex items-center gap-2 mt-1.5">
                     ${orderTypeBadge}
-                    ${order.waiterName ? `<span class="text-xs text-slate-400 font-semibold truncate">👤 ${order.waiterName}</span>` : ''}
+                    ${order.waiterName ? `<span class="text-xs text-slate-600 font-semibold truncate">👤 ${order.waiterName}</span>` : ''}
                   </div>
                 </div>
 
@@ -294,7 +294,7 @@
                   <button 
                     onclick="markAllOrderReady(${order.id})" 
                     title="Adisyo'da masayı hazır yap ve ekrandan düşür"
-                    class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition active:scale-95 shadow-md flex items-center gap-1.5 border border-emerald-400/50"
+                    class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition active:scale-95 shadow-sm flex items-center gap-1.5 border border-emerald-700/30"
                   >
                     <span>✓</span>
                     <span>Tümü Hazır</span>
@@ -303,13 +303,13 @@
 
               </div>
 
-              <!-- İlerleme Çubuğu -->
-              <div class="mt-3 flex items-center justify-between text-xs text-slate-400 font-bold border-t border-slate-800/80 pt-2">
-                <span class="${isAllReady ? 'text-emerald-400' : ''}">
+              <!-- İlerleme Çubuğu & Sayaç -->
+              <div class="mt-3 flex items-center justify-between text-xs text-slate-600 font-bold border-t border-slate-200 pt-2">
+                <span class="${isAllReady ? 'text-emerald-700 font-black' : ''}">
                   ${isAllReady ? '✓ TÜM ÜRÜNLER HAZIR' : `Hazırlık: ${readyItems} / ${totalItems}`}
                 </span>
                 <span id="timer-${order.id}" class="text-xs px-2 py-0.5 rounded font-mono font-bold ${
-                  elapsed >= 540 ? 'bg-red-950 text-red-300 border border-red-700 animate-pulse' : elapsed >= 240 ? 'bg-amber-950 text-amber-300 border border-amber-700' : 'bg-slate-800 text-slate-300'
+                  elapsed >= 540 ? 'bg-red-100 text-red-800 border border-red-300 animate-pulse' : elapsed >= 240 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-700 border border-slate-200'
                 }">
                   ⏱ ${formatTime(elapsed)}
                 </span>
@@ -317,7 +317,7 @@
             </div>
 
             <!-- TÜM ÜRÜNLER LİSTESİ (PİZZA, İÇECEK, SALATA, TATLI) -->
-            <div class="p-4 space-y-2.5 flex-1 bg-slate-900/60">
+            <div class="p-4 space-y-2.5 flex-1 bg-white">
               ${(order.products || []).map((item) => {
                 const isReady = item.isReady;
                 const cat = getCategoryBadge(item.category, item.isPizza);
@@ -325,8 +325,8 @@
                 return `
                   <div class="p-2.5 rounded-xl border transition-all ${
                     isReady 
-                      ? 'bg-emerald-950/40 border-emerald-600/50' 
-                      : 'bg-slate-850/80 border-slate-800 hover:border-slate-700'
+                      ? 'bg-emerald-50/70 border-emerald-300' 
+                      : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
                   }">
                     <div class="flex items-center justify-between gap-3">
                       
@@ -334,8 +334,8 @@
                       <div class="flex items-start gap-2.5 flex-1 min-w-0">
                         <span class="text-base font-black px-2 py-0.5 rounded-lg flex-shrink-0 ${
                           isReady 
-                            ? 'bg-emerald-900/50 text-emerald-300 border border-emerald-700/60 line-through' 
-                            : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 line-through' 
+                            : 'bg-amber-100 text-amber-900 border border-amber-300'
                         }">
                           ${item.qty}x
                         </span>
@@ -346,14 +346,14 @@
                               ${cat.icon} ${cat.label}
                             </span>
                             <span class="text-sm font-bold leading-tight ${
-                              isReady ? 'line-through text-slate-400' : 'text-white'
+                              isReady ? 'line-through text-slate-400' : 'text-slate-900'
                             }">
                               ${item.name}
                             </span>
                           </div>
 
                           ${item.note ? `
-                            <div class="mt-1 inline-flex items-center gap-1 bg-rose-950 border border-rose-800 text-rose-300 px-2 py-0.5 rounded text-[11px] font-black">
+                            <div class="mt-1 inline-flex items-center gap-1 bg-rose-50 border border-rose-300 text-rose-800 px-2 py-0.5 rounded text-[11px] font-black">
                               <span>⚠️</span>
                               <span>${item.note}</span>
                             </div>
@@ -365,10 +365,10 @@
                       <div class="flex-shrink-0">
                         <button 
                           onclick="toggleProductReady(${order.id}, '${item.id}')"
-                          class="px-3 py-1.5 rounded-xl font-black text-xs transition active:scale-95 flex items-center gap-1 shadow-sm ${
+                          class="px-3 py-1.5 rounded-xl font-bold text-xs transition active:scale-95 flex items-center gap-1 shadow-xs ${
                             isReady 
-                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
-                              : 'bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-300 border border-slate-700 hover:border-emerald-600'
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700' 
+                              : 'bg-white hover:bg-emerald-600 hover:text-white text-slate-700 border border-slate-300 hover:border-emerald-600'
                           }"
                         >
                           <span>${isReady ? '✓ Hazır' : 'Hazır'}</span>
