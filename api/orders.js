@@ -304,11 +304,9 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Anti-cache headers
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  // Anti-cache & edge protection
+  res.setHeader('Cache-Control', 'public, s-maxage=3, stale-while-revalidate=5');
   res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  res.setHeader('Surrogate-Control', 'no-store');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -483,5 +481,13 @@ module.exports = async function handler(req, res) {
     await fetchFromAdisyo(false);
   }
 
-  return res.status(200).json(getOrdersPayload());
+  const payload = getOrdersPayload();
+
+  // KRİTİK GÜVENLİK: Eğer Adisyo kota hatası verdiyse ve elimizde sipariş yoksa,
+  // 200 dönüp ekranı sildirme! 429 dön ki istemciler mevcut adisyonları korusun.
+  if (payload.count === 0 && payload.status && payload.status.includes('kota')) {
+    return res.status(429).json({ error: 'Adisyo kota beklemede', status: payload.status });
+  }
+
+  return res.status(200).json(payload);
 };

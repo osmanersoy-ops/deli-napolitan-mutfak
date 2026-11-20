@@ -503,7 +503,7 @@
       } catch (e) {
         const statusEl = document.getElementById('sync-status');
         if (statusEl) {
-          statusEl.textContent = 'Bağlantı Bekleniyor...';
+          statusEl.textContent = orders.length > 0 ? 'Adisyo Beklemede (Siparişler Korunuyor)' : 'Bağlantı Bekleniyor...';
         }
       }
     }
