@@ -91,10 +91,6 @@
         <span>🔄</span>
         <span>Yenile</span>
       </button>
-      <button onclick="toggleSound()" id="sound-btn" title="Sesli Bildirim" class="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
-        <span id="sound-icon">🔔</span>
-        <span id="sound-text">Ses Açık</span>
-      </button>
       <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-900 rounded-lg text-white text-xs font-bold transition active:scale-95 shadow-sm">
         <span>⛶</span>
         <span>Tam Ekran</span>
@@ -117,7 +113,6 @@
   </main>
 
   <script>
-    let soundEnabled = true;
     let orders = [];
     let previousOrderIds = new Set();
     let isFirstLoad = true;
@@ -125,26 +120,6 @@
     const localReadyOverrides = new Map();
     const renderedCardIds = new Set();
     const dismissedOrders = new Set();
-
-    function playKitchenChime() {
-      if (!soundEnabled) return;
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        if (ctx.state === 'suspended') ctx.resume();
-        const now = ctx.currentTime;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(659.25, now);
-        osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.8);
-      } catch (e) {}
-    }
 
     function formatTime(seconds) {
       const mins = Math.floor(seconds / 60);
@@ -503,17 +478,6 @@
 
         const currentIds = new Set(serverOrders.map(o => o.id));
 
-        let hasNewOrder = false;
-        serverOrders.forEach(so => {
-          if (!previousOrderIds.has(so.id) && !isFirstLoad) {
-            hasNewOrder = true;
-          }
-        });
-
-        if (hasNewOrder) {
-          playKitchenChime();
-        }
-
         dismissedOrders.forEach(dismissedId => {
           if (!currentIds.has(dismissedId)) {
             dismissedOrders.delete(dismissedId);
@@ -595,20 +559,6 @@
         await fetch('/api/orders?action=sync-now', { method: 'POST' });
       } catch (e) {}
       await syncOrders();
-    }
-
-    function toggleSound() {
-      soundEnabled = !soundEnabled;
-      const icon = document.getElementById('sound-icon');
-      const text = document.getElementById('sound-text');
-      if (soundEnabled) {
-        icon.textContent = '🔔';
-        text.textContent = 'Ses Açık';
-        playKitchenChime();
-      } else {
-        icon.textContent = '🔕';
-        text.textContent = 'Sessiz';
-      }
     }
 
     function toggleFullScreen() {
