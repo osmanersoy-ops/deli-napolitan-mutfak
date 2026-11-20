@@ -98,9 +98,9 @@
         <span>🔄</span>
         <span>Yenile</span>
       </button>
-      <button onclick="toggleSound()" id="sound-btn" title="Yazıcı Sesli Uyarı Aç/Kapat" class="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
-        <span id="sound-icon">🖨️</span>
-        <span id="sound-text">Yazıcı Sesi</span>
+      <button onclick="toggleSound()" id="sound-btn" title="Çan Sesi Aç/Kapat" class="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
+        <span id="sound-icon">🔔</span>
+        <span id="sound-text">Çan Sesi</span>
       </button>
       <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-900 rounded-lg text-white text-xs font-bold transition active:scale-95 shadow-sm">
         <span>⛶</span>
@@ -163,92 +163,91 @@
       }, 300);
     }
 
-    // Termal Adisyon Yazıcı Sesi (Çok kısa kağıt çıkma ve giyotin kesme sesi ~340ms)
-    function playPrinterSound() {
+    // Küçük Pirinç Asılı Yemek / Servis Çanı Sesi (3 Vuruş "Çın Çın Çııın")
+    let dinnerBellBuffer = null;
+
+    function getDinnerBellBuffer(ctx) {
+      if (dinnerBellBuffer) return dinnerBellBuffer;
+
+      const sr = ctx.sampleRate;
+      const dur = 1.05;
+      const numSamples = Math.floor(sr * dur);
+      const buffer = ctx.createBuffer(1, numSamples, sr);
+      const data = buffer.getChannelData(0);
+
+      // 3 Vuruş Zamanlaması: Çın (0s), Çın (0.20s), Çııın (0.42s)
+      const strikes = [
+        { t: 0.0, mult: 1.0, dur: 0.35 },
+        { t: 0.20, mult: 1.0, dur: 0.35 },
+        { t: 0.42, mult: 1.5, dur: 0.60 }
+      ];
+
+      const f0 = 2450.0; // Küçük pirinç akşam yemeği çanı temel tınısı
+      const partials = [
+        { r: 1.000, a: 1.00, d: 0.24 }, // Temel Çın tınısı
+        { r: 1.215, a: 0.48, d: 0.20 }, // Metalik tınlama
+        { r: 1.502, a: 0.35, d: 0.16 }, // Beşli armonik
+        { r: 2.000, a: 0.25, d: 0.13 }, // Oktav
+        { r: 2.760, a: 0.20, d: 0.08 }, // Çan şakırtısı
+        { r: 3.850, a: 0.14, d: 0.04 }  // Tokmak çarpma anı
+      ];
+
+      for (let i = 0; i < numSamples; i++) {
+        const t = i / sr;
+        let sample = 0;
+
+        for (let s = 0; s < strikes.length; s++) {
+          const st = strikes[s];
+          if (t >= st.t) {
+            const dt = t - st.t;
+            if (dt < st.dur) {
+              const m = st.mult;
+              for (let p = 0; p < partials.length; p++) {
+                const part = partials[p];
+                const freq = f0 * part.r;
+                const env = Math.exp(-dt / (part.d * m));
+                sample += Math.sin(2 * Math.PI * freq * dt) * part.a * env * 0.22;
+              }
+              // Metal tokmak darbe tıkırtısı (ilk 12ms)
+              if (dt < 0.012) {
+                sample += Math.sin(2 * Math.PI * 5600.0 * dt) * Math.exp(-dt * 350.0) * 0.18;
+              }
+            }
+          }
+        }
+        data[i] = Math.max(-1.0, Math.min(1.0, sample));
+      }
+
+      dinnerBellBuffer = buffer;
+      return dinnerBellBuffer;
+    }
+
+    function playDinnerBell() {
       if (!soundEnabled) return;
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
-        const ctx = new AudioCtx();
-        if (ctx.state === 'suspended') ctx.resume();
-
-        const now = ctx.currentTime;
-        const totalDuration = 0.35;
-
-        // 1. Termal Kağıt Akış Gürültüsü (White noise Buffer)
-        const bufferSize = Math.floor(ctx.sampleRate * totalDuration);
-        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          data[i] = Math.random() * 2 - 1;
+        if (!window.__bellAudioCtx) {
+          window.__bellAudioCtx = new AudioCtx();
+        }
+        const ctx = window.__bellAudioCtx;
+        if (ctx.state === 'suspended') {
+          ctx.resume();
         }
 
-        const noiseSrc = ctx.createBufferSource();
-        noiseSrc.buffer = noiseBuffer;
+        const buffer = getDinnerBellBuffer(ctx);
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
 
-        // Kağıt sürtünmesi için Bandpass Filtresi
-        const bandpass = ctx.createBiquadFilter();
-        bandpass.type = 'bandpass';
-        bandpass.frequency.setValueAtTime(1400, now);
-        bandpass.Q.setValueAtTime(1.3, now);
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.75, ctx.currentTime);
 
-        // İki seri satır basma darbesi (zrt - zrt)
-        const noiseGain = ctx.createGain();
-        noiseGain.gain.setValueAtTime(0.001, now);
-        noiseGain.gain.linearRampToValueAtTime(0.4, now + 0.02);
-        noiseGain.gain.setValueAtTime(0.4, now + 0.09);
-        noiseGain.gain.linearRampToValueAtTime(0.05, now + 0.11);
-        noiseGain.gain.setValueAtTime(0.05, now + 0.12);
-        noiseGain.gain.linearRampToValueAtTime(0.45, now + 0.14);
-        noiseGain.gain.setValueAtTime(0.45, now + 0.22);
-        noiseGain.gain.linearRampToValueAtTime(0.001, now + 0.25);
-
-        noiseSrc.connect(bandpass);
-        bandpass.connect(noiseGain);
-        noiseGain.connect(ctx.destination);
-
-        noiseSrc.start(now);
-        noiseSrc.stop(now + 0.26);
-
-        // 2. Adım Motoru Dişli Vızıltısı (190Hz Stepper)
-        const motorOsc = ctx.createOscillator();
-        motorOsc.type = 'sawtooth';
-        motorOsc.frequency.setValueAtTime(190, now);
-
-        const motorFilter = ctx.createBiquadFilter();
-        motorFilter.type = 'lowpass';
-        motorFilter.frequency.setValueAtTime(500, now);
-
-        const motorGain = ctx.createGain();
-        motorGain.gain.setValueAtTime(0.001, now);
-        motorGain.gain.linearRampToValueAtTime(0.12, now + 0.02);
-        motorGain.gain.setValueAtTime(0.12, now + 0.22);
-        motorGain.gain.linearRampToValueAtTime(0.001, now + 0.25);
-
-        motorOsc.connect(motorFilter);
-        motorFilter.connect(motorGain);
-        motorGain.connect(ctx.destination);
-
-        motorOsc.start(now);
-        motorOsc.stop(now + 0.26);
-
-        // 3. Kağıt Kesme (Giyotin Bıçak Sesi ~75ms)
-        const cutTime = now + 0.26;
-        const cutOsc = ctx.createOscillator();
-        cutOsc.type = 'triangle';
-        cutOsc.frequency.setValueAtTime(1700, cutTime);
-        cutOsc.frequency.exponentialRampToValueAtTime(220, cutTime + 0.07);
-
-        const cutGain = ctx.createGain();
-        cutGain.gain.setValueAtTime(0.35, cutTime);
-        cutGain.gain.exponentialRampToValueAtTime(0.001, cutTime + 0.075);
-
-        cutOsc.connect(cutGain);
-        cutGain.connect(ctx.destination);
-
-        cutOsc.start(cutTime);
-        cutOsc.stop(cutTime + 0.075);
-      } catch (e) {}
+        src.connect(gain);
+        gain.connect(ctx.destination);
+        src.start();
+      } catch (e) {
+        console.warn('Bell audio error:', e);
+      }
     }
 
     function formatTime(seconds) {
@@ -520,7 +519,7 @@
         });
 
         if (hasNewOrder) {
-          playPrinterSound();
+          playDinnerBell();
         }
 
         renderedCardIds.forEach(id => {
@@ -613,9 +612,9 @@
       const icon = document.getElementById('sound-icon');
       const text = document.getElementById('sound-text');
       if (soundEnabled) {
-        icon.textContent = '🖨️';
-        text.textContent = 'Yazıcı Sesi';
-        playPrinterSound();
+        icon.textContent = '🔔';
+        text.textContent = 'Çan Sesi';
+        playDinnerBell();
       } else {
         icon.textContent = '🔇';
         text.textContent = 'Sessiz';
