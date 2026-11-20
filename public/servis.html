@@ -139,21 +139,40 @@
       }
     }
 
-    function getCategoryBadge(catName, isPizza) {
-      const c = (catName || '').toLowerCase();
-      if (isPizza || c.includes('pizza')) {
-        return { label: 'Pizza', icon: '🍕', badgeClass: 'bg-rose-50 text-rose-800 border-rose-200' };
+    // Ürün Sıralama Grubu:
+    // 1: Pizzalar (En Üstte)
+    // 2: Ortaya (Yan ürünler, salatalar, mezeler, tatlılar vb. - Ortada)
+    // 3: İçecekler (En Altta)
+    function getProductGroup(item) {
+      const cat = (item.category || '').toLowerCase();
+      const name = (item.name || '').toLowerCase();
+
+      // 1. Pizzalar
+      if (
+        item.isPizza || 
+        cat.includes('pizza') || 
+        name.includes('pizza') || 
+        name.includes('calzone') || 
+        name.includes('margherita') || 
+        name.includes('napolitan')
+      ) {
+        return 1;
       }
-      if (c.includes('içecek') || c.includes('icecek') || c.includes('mesrubat') || c.includes('kahve') || c.includes('su') || c.includes('bira')) {
-        return { label: 'İçecek', icon: '🥤', badgeClass: 'bg-blue-50 text-blue-800 border-blue-200' };
+
+      // 3. İçecekler
+      if (
+        cat.includes('içecek') || cat.includes('icecek') || cat.includes('mesrubat') || cat.includes('meşrubat') ||
+        cat.includes('kahve') || cat.includes('su') || cat.includes('bira') || cat.includes('şarap') || cat.includes('sarap') ||
+        cat.includes('kokteyl') || cat.includes('alkol') || cat.includes('soda') || cat.includes('ayran') ||
+        name.includes('kola') || name.includes('cola') || name.includes('fanta') || name.includes('sprite') ||
+        name.includes('ayran') || name.includes('soda') || name.includes('su') ||
+        name.includes('bira') || name.includes('çay') || name.includes('cay') || name.includes('kahve') || name.includes('espresso')
+      ) {
+        return 3;
       }
-      if (c.includes('salata')) {
-        return { label: 'Salata', icon: '🥗', badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
-      }
-      if (c.includes('tatlı') || c.includes('tatli') || c.includes('pasta')) {
-        return { label: 'Tatlı', icon: '🍰', badgeClass: 'bg-amber-50 text-amber-900 border-amber-200' };
-      }
-      return { label: catName || 'Yan Ürün', icon: '🍽️', badgeClass: 'bg-slate-100 text-slate-700 border-slate-300' };
+
+      // 2. Ortaya (Salata, tatlı, makarna, başlangıç vb.)
+      return 2;
     }
 
     function computeOrdersSignature(ordersList) {
@@ -225,7 +244,7 @@
     }
 
     // ==========================================
-    // KARTLARI ÇİZ (BEYAZ TEMA)
+    // KARTLARI ÇİZ (SERVİS EKRANI - YENİ TASARIM)
     // ==========================================
     function renderOrders() {
       const container = document.getElementById('orders-grid');
@@ -258,6 +277,12 @@
           orderTypeBadge = '<span class="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-cyan-100 text-cyan-800 border border-cyan-300">GEL-AL</span>';
         }
 
+        // Ürünleri sırala:
+        // En üstte Pizzalar (1) -> Ortada Ortaya (2) -> En altta İçecekler (3)
+        const sortedProducts = [...(order.products || [])].sort((a, b) => {
+          return getProductGroup(a) - getProductGroup(b);
+        });
+
         return `
           <div 
             id="servis-card-${order.id}" 
@@ -269,32 +294,27 @@
                   : 'border-slate-200 hover:border-slate-300'
             } ${isNew ? 'order-enter' : ''}"
           >
-            <!-- BAŞLIK: MASA ADI VE YANINDA BÜYÜK "TÜMÜ HAZIR" BUTONU -->
-            <div class="p-4 bg-slate-50 border-b border-slate-200">
-              <div class="flex items-center justify-between gap-2.5">
+            <!-- BAŞLIK: MASA ADI (KÜÇÜK) + ADİSYON NO (YAN YANA) + TÜMÜ HAZIR BUTONU -->
+            <div class="px-3.5 py-3 bg-slate-50 border-b border-slate-200">
+              <div class="flex items-center justify-between gap-2">
                 
-                <!-- SOL: Masa Adı & Adisyon No -->
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-baseline gap-2 flex-wrap">
-                    <h2 class="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-none">
-                      ${order.tableName}
-                    </h2>
-                    <span class="text-lg font-bold text-slate-500">
-                      #${order.orderNumber}
-                    </span>
-                  </div>
-                  <div class="flex items-center gap-2 mt-1.5">
-                    ${orderTypeBadge}
-                    ${order.waiterName ? `<span class="text-xs text-slate-600 font-semibold truncate">👤 ${order.waiterName}</span>` : ''}
-                  </div>
+                <!-- SOL: Masa Adı (küçültüldü) & Adisyon No Yan Yana (Garson adı kaldırıldı) -->
+                <div class="flex items-center gap-2 flex-wrap min-w-0">
+                  <h2 class="text-lg md:text-xl font-black text-slate-900 tracking-tight leading-none">
+                    ${order.tableName}
+                  </h2>
+                  <span class="text-sm md:text-base font-bold text-slate-500">
+                    #${order.orderNumber}
+                  </span>
+                  ${orderTypeBadge}
                 </div>
 
                 <!-- SAĞ: MASA ADI YANINDAKİ "TÜMÜ HAZIR" BUTONU (ADİSYO'YU DÜŞÜRÜR) -->
-                <div class="flex-shrink-0 flex items-center gap-2">
+                <div class="flex-shrink-0">
                   <button 
                     onclick="markAllOrderReady(${order.id})" 
                     title="Adisyo'da masayı hazır yap ve ekrandan düşür"
-                    class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition active:scale-95 shadow-sm flex items-center gap-1.5 border border-emerald-700/30"
+                    class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black transition active:scale-95 shadow-sm flex items-center gap-1.5 border border-emerald-700/30"
                   >
                     <span>✓</span>
                     <span>Tümü Hazır</span>
@@ -304,7 +324,7 @@
               </div>
 
               <!-- İlerleme Çubuğu & Sayaç -->
-              <div class="mt-3 flex items-center justify-between text-xs text-slate-600 font-bold border-t border-slate-200 pt-2">
+              <div class="mt-2.5 flex items-center justify-between text-xs text-slate-600 font-bold border-t border-slate-200 pt-2">
                 <span class="${isAllReady ? 'text-emerald-700 font-black' : ''}">
                   ${isAllReady ? '✓ TÜM ÜRÜNLER HAZIR' : `Hazırlık: ${readyItems} / ${totalItems}`}
                 </span>
@@ -316,13 +336,17 @@
               </div>
             </div>
 
-            <!-- TÜM ÜRÜNLER LİSTESİ (PİZZA, İÇECEK, SALATA, TATLI) -->
-            <div class="p-4 space-y-2.5 flex-1 bg-white">
-              ${(order.products || []).map((item) => {
+            <!-- ÜRÜN LİSTESİ: EN ÜSTTE PİZZA -> ORTADA ORTAYA -> EN ALTTA İÇECEKLER (KATEGORİ İSMİ YOK) -->
+            <div class="p-3.5 space-y-2 flex-1 bg-white">
+              ${sortedProducts.map((item, index) => {
                 const isReady = item.isReady;
-                const cat = getCategoryBadge(item.category, item.isPizza);
+                const currentGroup = getProductGroup(item);
+                const prevGroup = index > 0 ? getProductGroup(sortedProducts[index - 1]) : null;
+                const showGroupDivider = (prevGroup !== null && currentGroup !== prevGroup);
 
                 return `
+                  ${showGroupDivider ? '<div class="border-t border-dashed border-slate-200 my-2"></div>' : ''}
+                  
                   <div class="p-2.5 rounded-xl border transition-all ${
                     isReady 
                       ? 'bg-emerald-50/70 border-emerald-300' 
@@ -330,7 +354,7 @@
                   }">
                     <div class="flex items-center justify-between gap-3">
                       
-                      <!-- SOL: ÜRÜN BİLGİSİ -->
+                      <!-- SOL: ADET VE ÜRÜN ADI (KATEGORİ İSMİ YOK!) -->
                       <div class="flex items-start gap-2.5 flex-1 min-w-0">
                         <span class="text-base font-black px-2 py-0.5 rounded-lg flex-shrink-0 ${
                           isReady 
@@ -341,16 +365,11 @@
                         </span>
 
                         <div class="min-w-0 flex-1">
-                          <div class="flex items-center gap-1.5 flex-wrap">
-                            <span class="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${cat.badgeClass}">
-                              ${cat.icon} ${cat.label}
-                            </span>
-                            <span class="text-sm font-bold leading-tight ${
-                              isReady ? 'line-through text-slate-400' : 'text-slate-900'
-                            }">
-                              ${item.name}
-                            </span>
-                          </div>
+                          <span class="text-sm font-bold leading-snug block ${
+                            isReady ? 'line-through text-slate-400' : 'text-slate-900'
+                          }">
+                            ${item.name}
+                          </span>
 
                           ${item.note ? `
                             <div class="mt-1 inline-flex items-center gap-1 bg-rose-50 border border-rose-300 text-rose-800 px-2 py-0.5 rounded text-[11px] font-black">
