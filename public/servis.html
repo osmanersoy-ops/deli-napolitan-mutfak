@@ -345,7 +345,7 @@
             } ${isNew ? 'order-enter' : ''}"
           >
             <!-- BAŞLIK: MASA ADI (KÜÇÜK) + ADİSYON NO (YAN YANA) + TÜMÜ HAZIR BUTONU -->
-            <div class="px-2.5 py-1.5 bg-slate-50 border-b border-slate-200 flex-shrink-0">
+            <div class="px-2.5 py-2 bg-slate-50 border-b border-slate-200 flex-shrink-0">
               <div class="flex items-center justify-between gap-1.5">
                 
                 <!-- SOL: Masa Adı (küçük) & Adisyon No Yan Yana (Garson adı yok) -->
@@ -359,15 +359,15 @@
                   ${orderTypeBadge}
                 </div>
 
-                <!-- SAĞ: MASA ADI YANINDAKİ "TÜMÜ HAZIR" BUTONU -->
+                <!-- SAĞ: MASA ADI YANINDAKİ "TÜMÜ HAZIR" BUTONU (BÜYÜTÜLDÜ) -->
                 <div class="flex-shrink-0">
                   <button 
                     onclick="markAllOrderReady(${order.id})" 
                     title="Adisyo'da masayı hazır yap ve ekrandan düşür"
-                    class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[11px] font-black transition active:scale-95 shadow-xs flex items-center gap-1 border border-emerald-700/30"
+                    class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs md:text-sm font-black transition active:scale-95 shadow-sm flex items-center gap-1.5 border border-emerald-700/40"
                   >
-                    <span>✓</span>
-                    <span>Tümü Hazır</span>
+                    <span class="text-xs md:text-sm font-black leading-none">✓</span>
+                    <span class="leading-none">Tümü Hazır</span>
                   </button>
                 </div>
 
@@ -431,17 +431,17 @@
                       </div>
                     </div>
 
-                    <!-- SAĞ: TEK TEK "HAZIR" BUTONU (GENİŞLETİLDİ) -->
+                    <!-- SAĞ: TEK TEK "HAZIR" BUTONU (BÜYÜTÜLDÜ) -->
                     <div class="flex-shrink-0">
                       <button 
                         onclick="toggleProductReady(${order.id}, '${item.id}')"
-                        class="px-3.5 py-1 min-w-[52px] justify-center rounded-md font-bold text-xs leading-tight transition active:scale-95 flex items-center gap-1 shadow-xs ${
+                        class="px-4 py-1.5 min-w-[68px] justify-center rounded-lg font-black text-xs md:text-sm leading-none transition active:scale-95 flex items-center gap-1 shadow-sm ${
                           isReady 
                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700' 
-                            : 'bg-white hover:bg-emerald-600 hover:text-white text-slate-700 border border-slate-300 hover:border-emerald-600'
+                            : 'bg-white hover:bg-emerald-600 hover:text-white text-slate-800 border border-slate-300 hover:border-emerald-600'
                         }"
                       >
-                        <span>${isReady ? '✓' : 'Hazır'}</span>
+                        <span class="${isReady ? 'text-sm font-black' : ''}">${isReady ? '✓' : 'Hazır'}</span>
                       </button>
                     </div>
 
