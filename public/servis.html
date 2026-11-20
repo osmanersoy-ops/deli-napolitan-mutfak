@@ -6,6 +6,33 @@
   <title>Deli Napolitan - Servis & Expo Ekranı</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
+    :root {
+      --header-height: 46px;
+      --main-py: 16px;
+      --grid-gap: 10px;
+      --peek-height: 1.5cm;
+      /* Ekranın altında 1,5 cm bırakıldıktan sonra kalan alan tam ortadan 2'ye bölünür */
+      /* Ekrana 4 sütunda tam 8 adisyon sığar */
+      --slot-height: calc((100vh - var(--header-height) - var(--main-py) - var(--peek-height) - var(--grid-gap)) / 2);
+    }
+    .kds-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-auto-rows: var(--slot-height);
+      gap: var(--grid-gap);
+      grid-auto-flow: row;
+    }
+    @media (max-width: 1024px) {
+      .kds-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 640px) {
+      .kds-grid {
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+        grid-auto-rows: auto;
+      }
+    }
     @keyframes pulse-urgent {
       0%, 100% { border-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.35); }
       50% { border-color: #dc2626; box-shadow: 0 0 25px rgba(220, 38, 38, 0.6); }
@@ -38,46 +65,46 @@
     }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-900 min-h-screen font-sans antialiased select-none flex flex-col">
+<body class="bg-slate-100 text-slate-900 h-screen overflow-hidden font-sans antialiased select-none flex flex-col">
 
-  <!-- TOP BAR (BEYAZ TEMA) -->
-  <header class="px-5 py-2.5 flex items-center justify-between sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
+  <!-- TOP BAR (BEYAZ TEMA, SABİT 46px) -->
+  <header class="h-[46px] px-4 flex items-center justify-between sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm flex-shrink-0">
     <div class="flex items-center gap-3">
-      <a href="/" title="Ana Sayfaya Dön" class="text-lg font-black text-amber-600 hover:text-amber-500 transition flex items-center gap-2 tracking-tight">
+      <a href="/" title="Ana Sayfaya Dön" class="text-base md:text-lg font-black text-amber-600 hover:text-amber-500 transition flex items-center gap-1.5 tracking-tight">
         <span>🛎️</span> DELI NAPOLITAN
       </a>
-      <span class="text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md border border-slate-300">
+      <span class="text-[11px] font-bold text-slate-700 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md border border-slate-300">
         Servis & Expo
       </span>
-      <div class="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 rounded-full text-emerald-800 text-xs font-bold shadow-xs">
+      <div class="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 rounded-full text-emerald-800 text-[11px] font-bold shadow-xs">
         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
         <span id="sync-status">Adisyo Canlı</span>
       </div>
     </div>
 
     <div class="flex items-center gap-2">
-      <a href="/mutfak" title="Mutfak Fırın Ekranına Geç" class="flex items-center gap-1.5 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition active:scale-95 shadow-sm">
+      <a href="/mutfak" title="Mutfak Fırın Ekranına Geç" class="flex items-center gap-1.5 px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition active:scale-95 shadow-sm">
         <span>🍕</span>
         <span>Mutfak Ekranı</span>
       </a>
-      <button onclick="manualSync()" title="Şimdi Yenile" class="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
+      <button onclick="manualSync()" title="Şimdi Yenile" class="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
         <span>🔄</span>
         <span>Yenile</span>
       </button>
-      <button onclick="toggleSound()" id="sound-btn" title="Sesli Bildirim" class="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
+      <button onclick="toggleSound()" id="sound-btn" title="Sesli Bildirim" class="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
         <span id="sound-icon">🔔</span>
         <span id="sound-text">Ses Açık</span>
       </button>
-      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 rounded-lg text-white text-xs font-bold transition active:scale-95 shadow-sm">
+      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-900 rounded-lg text-white text-xs font-bold transition active:scale-95 shadow-sm">
         <span>⛶</span>
         <span>Tam Ekran</span>
       </button>
     </div>
   </header>
 
-  <!-- MAIN KDS GRID: 4 SÜTUN DÜZENİ (4 adisyondan sonra alt satıra geçer, ekrana 8 adisyon rahatça sığar) -->
-  <main class="flex-1 px-3.5 py-3 overflow-y-auto">
-    <div id="orders-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-4 gap-3 items-start">
+  <!-- MAIN KDS GRID: 4 SÜTUN x 2 SATIR (8 adisyon tam sığar, 1.5 cm alttan 9+ adisyon başlığı görünür) -->
+  <main class="flex-1 px-3 py-2 overflow-y-auto">
+    <div id="orders-grid" class="kds-grid">
       <!-- Tüm ürünleriyle adisyon kartları 4 sütun halinde buraya basılır -->
     </div>
 
@@ -175,6 +202,18 @@
       return 2;
     }
 
+    // Adisyon Çok Fazla Ürün İçerip Kendine Ayrılan 1 Slota Sığmıyor mu?
+    // Kullanıcı kuralı: Kendine ayrılan alana sığmıyorsa (örn 10 ürün),
+    // bulunduğu sütunda tek kalsın (row-span-2) ve bir altına adisyon gelmesin!
+    function shouldCardSpanTwoRows(order) {
+      const products = order.products || [];
+      let score = 0;
+      for (const p of products) {
+        score += (p.note ? 1.5 : 1);
+      }
+      return score >= 7.5; // 8 ve üzeri ürün veya notlu 7 ürün tek slota sığmaz
+    }
+
     function computeOrdersSignature(ordersList) {
       return ordersList.map(o => {
         const pSig = (o.products || []).map(p => `${p.id}:${p.isReady ? 1 : 0}`).join(',');
@@ -226,6 +265,9 @@
 
       setTimeout(() => {
         orders = orders.filter(o => o.id !== orderId);
+        try {
+          localStorage.setItem('deli_servis_orders', JSON.stringify(orders));
+        } catch (e) {}
         renderOrders();
       }, 350);
 
@@ -244,7 +286,7 @@
     }
 
     // ==========================================
-    // KARTLARI ÇİZ (SERVİS EKRANI - İNCE & KOMPAKT 4'LÜ SÜTUN)
+    // KARTLARI ÇİZ (SERVİS EKRANI - TABLET TAM EKRAN DÜZENİ)
     // ==========================================
     function renderOrders() {
       const container = document.getElementById('orders-grid');
@@ -283,10 +325,15 @@
           return getProductGroup(a) - getProductGroup(b);
         });
 
+        // Kural: Çok ürün varsa kendine ayrılan yere sığmaz, bulunduğu sütunda 2 slot kaplar (row-span-2)
+        const isSpan2 = shouldCardSpanTwoRows(order);
+
         return `
           <div 
             id="servis-card-${order.id}" 
-            class="bg-white rounded-xl border-2 transition-all shadow-sm hover:shadow-md flex flex-col justify-between overflow-hidden ${
+            class="bg-white rounded-xl border-2 transition-all shadow-sm hover:shadow-md flex flex-col justify-between overflow-hidden h-full ${
+              isSpan2 ? 'row-span-2' : ''
+            } ${
               isAllReady 
                 ? 'border-emerald-500 bg-emerald-50/20' 
                 : isUrgent 
@@ -295,12 +342,12 @@
             } ${isNew ? 'order-enter' : ''}"
           >
             <!-- BAŞLIK: MASA ADI (KÜÇÜK) + ADİSYON NO (YAN YANA) + TÜMÜ HAZIR BUTONU -->
-            <div class="px-2.5 py-2 bg-slate-50 border-b border-slate-200">
+            <div class="px-2.5 py-1.5 bg-slate-50 border-b border-slate-200 flex-shrink-0">
               <div class="flex items-center justify-between gap-1.5">
                 
                 <!-- SOL: Masa Adı (küçük) & Adisyon No Yan Yana (Garson adı yok) -->
                 <div class="flex items-center gap-1.5 flex-wrap min-w-0">
-                  <h2 class="text-base font-black text-slate-900 tracking-tight leading-none truncate max-w-[130px]" title="${order.tableName}">
+                  <h2 class="text-sm md:text-base font-black text-slate-900 tracking-tight leading-none truncate max-w-[130px]" title="${order.tableName}">
                     ${order.tableName}
                   </h2>
                   <span class="text-xs font-bold text-slate-500">
@@ -324,7 +371,7 @@
               </div>
 
               <!-- İlerleme Çubuğu & Sayaç -->
-              <div class="mt-1.5 flex items-center justify-between text-[11px] text-slate-600 font-bold border-t border-slate-200/80 pt-1">
+              <div class="mt-1 flex items-center justify-between text-[11px] text-slate-600 font-bold border-t border-slate-200/80 pt-0.5">
                 <span class="${isAllReady ? 'text-emerald-700 font-black' : ''}">
                   ${isAllReady ? '✓ TÜMÜ HAZIR' : `Hazırlık: ${readyItems}/${totalItems}`}
                 </span>
@@ -337,7 +384,7 @@
             </div>
 
             <!-- ÜRÜN LİSTESİ: İNCE SATIRLAR, ASLA 2 SATIR OLMAYACAK (TRUNCATE İLE NOKTALI KESİM) -->
-            <div class="p-2 space-y-1 flex-1 bg-white">
+            <div class="p-2 space-y-1 flex-1 overflow-y-auto bg-white">
               ${sortedProducts.map((item, index) => {
                 const isReady = item.isReady;
                 const currentGroup = getProductGroup(item);
