@@ -287,8 +287,8 @@ function getOrdersPayload() {
     .map(formatOrder)
     .filter(Boolean);
 
-  // KURAL: Yeni sipariş ekranın solunda sol başa gelsin (En yeni ilk sırada)
-  formatted.sort((a, b) => new Date(b.insertDate) - new Date(a.insertDate));
+  // KURAL: En eski sipariş sol üst başta olsun (FIFO), yeni gelenler sağa ve aşağıya aksın
+  formatted.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
 
   return {
     orders: formatted,

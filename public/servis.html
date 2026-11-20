@@ -294,6 +294,9 @@
 
       const visibleOrders = orders.filter(o => !dismissedOrders.has(o.id));
 
+      // KURAL: En eski sipariş sol üst başta (ilk sırada), son gelen sağa geçsin
+      visibleOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
+
       if (!visibleOrders || visibleOrders.length === 0) {
         container.innerHTML = '';
         emptyState.classList.remove('hidden');

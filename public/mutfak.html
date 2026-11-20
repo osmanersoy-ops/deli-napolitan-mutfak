@@ -217,6 +217,9 @@
       // SADECE İÇİNDE PİZZA OLAN ADİSYONLARI MUTFAK EKRANINA BAS
       const kitchenOrders = orders.filter(o => o.pizzas && o.pizzas.length > 0);
 
+      // KURAL: En eski sipariş sol üst başta (ilk sırada), son gelen sağa geçsin (FIFO)
+      kitchenOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
+
       let grandTotalPizzas = 0;
       kitchenOrders.forEach(o => {
         const pending = (o.pizzas || []).filter(p => !p.isReady).length;
