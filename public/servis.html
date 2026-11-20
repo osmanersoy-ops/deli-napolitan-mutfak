@@ -203,7 +203,7 @@
     }
 
     // Adisyon Çok Fazla Ürün İçerip Kendine Ayrılan 1 Slota Sığmıyor mu?
-    // Kullanıcı kuralı: Kendine ayrılan alana sığmıyorsa (örn 10 ürün),
+    // Kullanıcı kuralı: Kendine ayrılan alana sığmıyorsa (örn 9-10 ürün),
     // bulunduğu sütunda tek kalsın (row-span-2) ve bir altına adisyon gelmesin!
     function shouldCardSpanTwoRows(order) {
       const products = order.products || [];
@@ -211,7 +211,7 @@
       for (const p of products) {
         score += (p.note ? 1.5 : 1);
       }
-      return score >= 7.5; // 8 ve üzeri ürün veya notlu 7 ürün tek slota sığmaz
+      return score >= 8; // 9 normal ürün veya notlu 8 ürün tek slota sığmaz
     }
 
     function computeOrdersSignature(ordersList) {
@@ -370,12 +370,12 @@
 
               </div>
 
-              <!-- İlerleme Çubuğu & Sayaç -->
-              <div class="mt-1 flex items-center justify-between text-[11px] text-slate-600 font-bold border-t border-slate-200/80 pt-0.5">
+              <!-- İlerleme Çubuğu & Sayaç (Satır ve Sayaç Fontu Büyütüldü) -->
+              <div class="mt-1.5 pt-1 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-600 font-bold">
                 <span class="${isAllReady ? 'text-emerald-700 font-black' : ''}">
                   ${isAllReady ? '✓ TÜMÜ HAZIR' : `Hazırlık: ${readyItems}/${totalItems}`}
                 </span>
-                <span id="timer-${order.id}" class="text-[11px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                <span id="timer-${order.id}" class="text-xs md:text-sm px-2 py-0.5 rounded-md font-mono font-black tracking-wide ${
                   elapsed >= 540 ? 'bg-red-100 text-red-800 border border-red-300 animate-pulse' : elapsed >= 240 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-700 border border-slate-200'
                 }">
                   ⏱ ${formatTime(elapsed)}
@@ -383,7 +383,7 @@
               </div>
             </div>
 
-            <!-- ÜRÜN LİSTESİ: İNCE SATIRLAR, ASLA 2 SATIR OLMAYACAK (TRUNCATE İLE NOKTALI KESİM) -->
+            <!-- ÜRÜN LİSTESİ: SATIRLAR %10 BÜYÜTÜLDÜ, FONT BÜYÜTÜLDÜ, BUTON GENİŞLETİLDİ -->
             <div class="p-2 space-y-1 flex-1 overflow-y-auto bg-white">
               ${sortedProducts.map((item, index) => {
                 const isReady = item.isReady;
@@ -394,15 +394,15 @@
                 return `
                   ${showGroupDivider ? '<div class="border-t border-dashed border-slate-200 my-1"></div>' : ''}
                   
-                  <div class="py-1 px-2 rounded-lg border transition-all flex items-center justify-between gap-1.5 ${
+                  <div class="py-1.5 px-2.5 rounded-lg border transition-all flex items-center justify-between gap-2 ${
                     isReady 
                       ? 'bg-emerald-50/70 border-emerald-300' 
                       : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
                   }">
                     
-                    <!-- SOL: ADET VE ÜRÜN ADI (KATEGORİ YOK, ASLA 2 SATIR OLMAZ, NOKTALI KESİLİR) -->
-                    <div class="flex items-center gap-1.5 flex-1 min-w-0">
-                      <span class="text-xs font-black px-1.5 py-0.5 rounded flex-shrink-0 leading-none ${
+                    <!-- SOL: ADET VE ÜRÜN ADI (FONT BÜYÜTÜLDÜ, KATEGORİ YOK, ASLA 2 SATIR OLMAZ) -->
+                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                      <span class="text-xs md:text-sm font-black px-2 py-0.5 rounded flex-shrink-0 leading-none ${
                         isReady 
                           ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 line-through' 
                           : 'bg-amber-100 text-amber-900 border border-amber-300'
@@ -412,7 +412,7 @@
 
                       <div class="min-w-0 flex-1">
                         <span 
-                          class="text-xs font-bold leading-tight block truncate whitespace-nowrap ${
+                          class="text-xs md:text-sm font-bold leading-snug block truncate whitespace-nowrap ${
                             isReady ? 'line-through text-slate-400' : 'text-slate-900'
                           }"
                           title="${item.name}"
@@ -421,18 +421,18 @@
                         </span>
 
                         ${item.note ? `
-                          <span class="text-[10px] font-bold text-rose-700 truncate block whitespace-nowrap leading-none mt-0.5" title="${item.note}">
+                          <span class="text-[10px] md:text-[11px] font-bold text-rose-700 truncate block whitespace-nowrap leading-none mt-0.5" title="${item.note}">
                             ⚠️ ${item.note}
                           </span>
                         ` : ''}
                       </div>
                     </div>
 
-                    <!-- SAĞ: TEK TEK "HAZIR" BUTONU (KOMPAKT) -->
+                    <!-- SAĞ: TEK TEK "HAZIR" BUTONU (GENİŞLETİLDİ) -->
                     <div class="flex-shrink-0">
                       <button 
                         onclick="toggleProductReady(${order.id}, '${item.id}')"
-                        class="px-2 py-0.5 rounded-md font-bold text-[11px] leading-tight transition active:scale-95 flex items-center gap-1 shadow-xs ${
+                        class="px-3.5 py-1 min-w-[52px] justify-center rounded-md font-bold text-xs leading-tight transition active:scale-95 flex items-center gap-1 shadow-xs ${
                           isReady 
                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700' 
                             : 'bg-white hover:bg-emerald-600 hover:text-white text-slate-700 border border-slate-300 hover:border-emerald-600'
@@ -565,6 +565,13 @@
         const timerEl = document.getElementById(`timer-${order.id}`);
         if (timerEl) {
           timerEl.textContent = `⏱ ${formatTime(elapsed)}`;
+          if (elapsed >= 540) {
+            timerEl.className = "text-xs md:text-sm px-2 py-0.5 rounded-md font-mono font-black tracking-wide bg-red-100 text-red-800 border border-red-300 animate-pulse";
+          } else if (elapsed >= 240) {
+            timerEl.className = "text-xs md:text-sm px-2 py-0.5 rounded-md font-mono font-black tracking-wide bg-amber-100 text-amber-900 border border-amber-300";
+          } else {
+            timerEl.className = "text-xs md:text-sm px-2 py-0.5 rounded-md font-mono font-black tracking-wide bg-slate-100 text-slate-700 border border-slate-200";
+          }
         }
       });
     }, 1000);
