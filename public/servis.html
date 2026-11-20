@@ -41,49 +41,49 @@
 <body class="bg-slate-100 text-slate-900 min-h-screen font-sans antialiased select-none flex flex-col">
 
   <!-- TOP BAR (BEYAZ TEMA) -->
-  <header class="px-6 py-3 flex items-center justify-between sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
+  <header class="px-5 py-2.5 flex items-center justify-between sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
     <div class="flex items-center gap-3">
-      <a href="/" title="Ana Sayfaya Dön" class="text-xl font-black text-amber-600 hover:text-amber-500 transition flex items-center gap-2 tracking-tight">
+      <a href="/" title="Ana Sayfaya Dön" class="text-lg font-black text-amber-600 hover:text-amber-500 transition flex items-center gap-2 tracking-tight">
         <span>🛎️</span> DELI NAPOLITAN
       </a>
-      <span class="text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-100 px-2.5 py-1 rounded-md border border-slate-300">
+      <span class="text-xs font-bold text-slate-700 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md border border-slate-300">
         Servis & Expo
       </span>
-      <div class="flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-3 py-1 rounded-full text-emerald-800 text-xs font-bold shadow-xs">
+      <div class="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 px-2.5 py-0.5 rounded-full text-emerald-800 text-xs font-bold shadow-xs">
         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span id="sync-status">Adisyo Canlı Bağlı</span>
+        <span id="sync-status">Adisyo Canlı</span>
       </div>
     </div>
 
-    <div class="flex items-center gap-2.5">
-      <a href="/mutfak" title="Mutfak Fırın Ekranına Geç" class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition active:scale-95 shadow-sm">
+    <div class="flex items-center gap-2">
+      <a href="/mutfak" title="Mutfak Fırın Ekranına Geç" class="flex items-center gap-1.5 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition active:scale-95 shadow-sm">
         <span>🍕</span>
         <span>Mutfak Ekranı</span>
       </a>
-      <button onclick="manualSync()" title="Şimdi Yenile" class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
+      <button onclick="manualSync()" title="Şimdi Yenile" class="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
         <span>🔄</span>
         <span>Yenile</span>
       </button>
-      <button onclick="toggleSound()" id="sound-btn" title="Sesli Bildirim" class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
+      <button onclick="toggleSound()" id="sound-btn" title="Sesli Bildirim" class="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-slate-700 text-xs font-bold transition active:scale-95 shadow-xs">
         <span id="sound-icon">🔔</span>
         <span id="sound-text">Ses Açık</span>
       </button>
-      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-900 rounded-lg text-white text-xs font-bold transition active:scale-95 shadow-sm">
+      <button onclick="toggleFullScreen()" title="Tam Ekran Modu" class="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 rounded-lg text-white text-xs font-bold transition active:scale-95 shadow-sm">
         <span>⛶</span>
         <span>Tam Ekran</span>
       </button>
     </div>
   </header>
 
-  <!-- MAIN KDS GRID -->
-  <main class="flex-1 px-6 py-6 overflow-y-auto">
-    <div id="orders-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5 items-start">
-      <!-- Tüm ürünleriyle adisyon kartları buraya basılır -->
+  <!-- MAIN KDS GRID: 4 SÜTUN DÜZENİ (4 adisyondan sonra alt satıra geçer, ekrana 8 adisyon rahatça sığar) -->
+  <main class="flex-1 px-3.5 py-3 overflow-y-auto">
+    <div id="orders-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-4 gap-3 items-start">
+      <!-- Tüm ürünleriyle adisyon kartları 4 sütun halinde buraya basılır -->
     </div>
 
     <!-- Boş Durum -->
-    <div id="empty-state" class="hidden text-center py-36">
-      <div class="text-7xl mb-3">🛎️</div>
+    <div id="empty-state" class="hidden text-center py-32">
+      <div class="text-6xl mb-3">🛎️</div>
       <h3 class="text-2xl font-black text-slate-800">Bekleyen Servis Adisyonu Yok</h3>
       <p class="text-sm text-slate-500 mt-1">Adisyo'dan sipariş girildiğinde buraya anında düşecektir.</p>
     </div>
@@ -244,7 +244,7 @@
     }
 
     // ==========================================
-    // KARTLARI ÇİZ (SERVİS EKRANI - YENİ TASARIM)
+    // KARTLARI ÇİZ (SERVİS EKRANI - İNCE & KOMPAKT 4'LÜ SÜTUN)
     // ==========================================
     function renderOrders() {
       const container = document.getElementById('orders-grid');
@@ -272,9 +272,9 @@
 
         let orderTypeBadge = '';
         if (order.orderType === 'PAKET') {
-          orderTypeBadge = '<span class="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-300">PAKET</span>';
+          orderTypeBadge = '<span class="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-300">PAKET</span>';
         } else if (order.orderType === 'GEL-AL') {
-          orderTypeBadge = '<span class="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-cyan-100 text-cyan-800 border border-cyan-300">GEL-AL</span>';
+          orderTypeBadge = '<span class="px-1.5 py-0.2 rounded text-[10px] font-black uppercase tracking-wider bg-cyan-100 text-cyan-800 border border-cyan-300">GEL-AL</span>';
         }
 
         // Ürünleri sırala:
@@ -286,35 +286,35 @@
         return `
           <div 
             id="servis-card-${order.id}" 
-            class="bg-white rounded-2xl border-2 transition-all shadow-md hover:shadow-lg flex flex-col justify-between overflow-hidden ${
+            class="bg-white rounded-xl border-2 transition-all shadow-sm hover:shadow-md flex flex-col justify-between overflow-hidden ${
               isAllReady 
-                ? 'border-emerald-500 bg-emerald-50/30' 
+                ? 'border-emerald-500 bg-emerald-50/20' 
                 : isUrgent 
                   ? 'border-red-500 card-urgent' 
                   : 'border-slate-200 hover:border-slate-300'
             } ${isNew ? 'order-enter' : ''}"
           >
             <!-- BAŞLIK: MASA ADI (KÜÇÜK) + ADİSYON NO (YAN YANA) + TÜMÜ HAZIR BUTONU -->
-            <div class="px-3.5 py-3 bg-slate-50 border-b border-slate-200">
-              <div class="flex items-center justify-between gap-2">
+            <div class="px-2.5 py-2 bg-slate-50 border-b border-slate-200">
+              <div class="flex items-center justify-between gap-1.5">
                 
-                <!-- SOL: Masa Adı (küçültüldü) & Adisyon No Yan Yana (Garson adı kaldırıldı) -->
-                <div class="flex items-center gap-2 flex-wrap min-w-0">
-                  <h2 class="text-lg md:text-xl font-black text-slate-900 tracking-tight leading-none">
+                <!-- SOL: Masa Adı (küçük) & Adisyon No Yan Yana (Garson adı yok) -->
+                <div class="flex items-center gap-1.5 flex-wrap min-w-0">
+                  <h2 class="text-base font-black text-slate-900 tracking-tight leading-none truncate max-w-[130px]" title="${order.tableName}">
                     ${order.tableName}
                   </h2>
-                  <span class="text-sm md:text-base font-bold text-slate-500">
+                  <span class="text-xs font-bold text-slate-500">
                     #${order.orderNumber}
                   </span>
                   ${orderTypeBadge}
                 </div>
 
-                <!-- SAĞ: MASA ADI YANINDAKİ "TÜMÜ HAZIR" BUTONU (ADİSYO'YU DÜŞÜRÜR) -->
+                <!-- SAĞ: MASA ADI YANINDAKİ "TÜMÜ HAZIR" BUTONU -->
                 <div class="flex-shrink-0">
                   <button 
                     onclick="markAllOrderReady(${order.id})" 
                     title="Adisyo'da masayı hazır yap ve ekrandan düşür"
-                    class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black transition active:scale-95 shadow-sm flex items-center gap-1.5 border border-emerald-700/30"
+                    class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-[11px] font-black transition active:scale-95 shadow-xs flex items-center gap-1 border border-emerald-700/30"
                   >
                     <span>✓</span>
                     <span>Tümü Hazır</span>
@@ -324,11 +324,11 @@
               </div>
 
               <!-- İlerleme Çubuğu & Sayaç -->
-              <div class="mt-2.5 flex items-center justify-between text-xs text-slate-600 font-bold border-t border-slate-200 pt-2">
+              <div class="mt-1.5 flex items-center justify-between text-[11px] text-slate-600 font-bold border-t border-slate-200/80 pt-1">
                 <span class="${isAllReady ? 'text-emerald-700 font-black' : ''}">
-                  ${isAllReady ? '✓ TÜM ÜRÜNLER HAZIR' : `Hazırlık: ${readyItems} / ${totalItems}`}
+                  ${isAllReady ? '✓ TÜMÜ HAZIR' : `Hazırlık: ${readyItems}/${totalItems}`}
                 </span>
-                <span id="timer-${order.id}" class="text-xs px-2 py-0.5 rounded font-mono font-bold ${
+                <span id="timer-${order.id}" class="text-[11px] px-1.5 py-0.2 rounded font-mono font-bold ${
                   elapsed >= 540 ? 'bg-red-100 text-red-800 border border-red-300 animate-pulse' : elapsed >= 240 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-slate-100 text-slate-700 border border-slate-200'
                 }">
                   ⏱ ${formatTime(elapsed)}
@@ -336,8 +336,8 @@
               </div>
             </div>
 
-            <!-- ÜRÜN LİSTESİ: EN ÜSTTE PİZZA -> ORTADA ORTAYA -> EN ALTTA İÇECEKLER (KATEGORİ İSMİ YOK) -->
-            <div class="p-3.5 space-y-2 flex-1 bg-white">
+            <!-- ÜRÜN LİSTESİ: İNCE SATIRLAR, ASLA 2 SATIR OLMAYACAK (TRUNCATE İLE NOKTALI KESİM) -->
+            <div class="p-2 space-y-1 flex-1 bg-white">
               ${sortedProducts.map((item, index) => {
                 const isReady = item.isReady;
                 const currentGroup = getProductGroup(item);
@@ -345,56 +345,56 @@
                 const showGroupDivider = (prevGroup !== null && currentGroup !== prevGroup);
 
                 return `
-                  ${showGroupDivider ? '<div class="border-t border-dashed border-slate-200 my-2"></div>' : ''}
+                  ${showGroupDivider ? '<div class="border-t border-dashed border-slate-200 my-1"></div>' : ''}
                   
-                  <div class="p-2.5 rounded-xl border transition-all ${
+                  <div class="py-1 px-2 rounded-lg border transition-all flex items-center justify-between gap-1.5 ${
                     isReady 
                       ? 'bg-emerald-50/70 border-emerald-300' 
                       : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
                   }">
-                    <div class="flex items-center justify-between gap-3">
-                      
-                      <!-- SOL: ADET VE ÜRÜN ADI (KATEGORİ İSMİ YOK!) -->
-                      <div class="flex items-start gap-2.5 flex-1 min-w-0">
-                        <span class="text-base font-black px-2 py-0.5 rounded-lg flex-shrink-0 ${
-                          isReady 
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 line-through' 
-                            : 'bg-amber-100 text-amber-900 border border-amber-300'
-                        }">
-                          ${item.qty}x
+                    
+                    <!-- SOL: ADET VE ÜRÜN ADI (KATEGORİ YOK, ASLA 2 SATIR OLMAZ, NOKTALI KESİLİR) -->
+                    <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                      <span class="text-xs font-black px-1.5 py-0.5 rounded flex-shrink-0 leading-none ${
+                        isReady 
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 line-through' 
+                          : 'bg-amber-100 text-amber-900 border border-amber-300'
+                      }">
+                        ${item.qty}x
+                      </span>
+
+                      <div class="min-w-0 flex-1">
+                        <span 
+                          class="text-xs font-bold leading-tight block truncate whitespace-nowrap ${
+                            isReady ? 'line-through text-slate-400' : 'text-slate-900'
+                          }"
+                          title="${item.name}"
+                        >
+                          ${item.name}
                         </span>
 
-                        <div class="min-w-0 flex-1">
-                          <span class="text-sm font-bold leading-snug block ${
-                            isReady ? 'line-through text-slate-400' : 'text-slate-900'
-                          }">
-                            ${item.name}
+                        ${item.note ? `
+                          <span class="text-[10px] font-bold text-rose-700 truncate block whitespace-nowrap leading-none mt-0.5" title="${item.note}">
+                            ⚠️ ${item.note}
                           </span>
-
-                          ${item.note ? `
-                            <div class="mt-1 inline-flex items-center gap-1 bg-rose-50 border border-rose-300 text-rose-800 px-2 py-0.5 rounded text-[11px] font-black">
-                              <span>⚠️</span>
-                              <span>${item.note}</span>
-                            </div>
-                          ` : ''}
-                        </div>
+                        ` : ''}
                       </div>
-
-                      <!-- SAĞ: TEK TEK "HAZIR" BUTONU -->
-                      <div class="flex-shrink-0">
-                        <button 
-                          onclick="toggleProductReady(${order.id}, '${item.id}')"
-                          class="px-3 py-1.5 rounded-xl font-bold text-xs transition active:scale-95 flex items-center gap-1 shadow-xs ${
-                            isReady 
-                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700' 
-                              : 'bg-white hover:bg-emerald-600 hover:text-white text-slate-700 border border-slate-300 hover:border-emerald-600'
-                          }"
-                        >
-                          <span>${isReady ? '✓ Hazır' : 'Hazır'}</span>
-                        </button>
-                      </div>
-
                     </div>
+
+                    <!-- SAĞ: TEK TEK "HAZIR" BUTONU (KOMPAKT) -->
+                    <div class="flex-shrink-0">
+                      <button 
+                        onclick="toggleProductReady(${order.id}, '${item.id}')"
+                        class="px-2 py-0.5 rounded-md font-bold text-[11px] leading-tight transition active:scale-95 flex items-center gap-1 shadow-xs ${
+                          isReady 
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700' 
+                            : 'bg-white hover:bg-emerald-600 hover:text-white text-slate-700 border border-slate-300 hover:border-emerald-600'
+                        }"
+                      >
+                        <span>${isReady ? '✓' : 'Hazır'}</span>
+                      </button>
+                    </div>
+
                   </div>
                 `;
               }).join('')}
