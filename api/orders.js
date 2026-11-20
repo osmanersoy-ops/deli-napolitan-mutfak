@@ -477,8 +477,8 @@ module.exports = async function handler(req, res) {
   // ==========================================
   const now = Date.now();
   const lastCall = getLastAdisyoCallTime();
-  if (now - lastCall >= 25000) {
-    await fetchFromAdisyo(false);
+  if (now - lastCall >= 25000 || (cachedOrders.length === 0 && now - lastCall >= 6000)) {
+    await fetchFromAdisyo(cachedOrders.length === 0);
   }
 
   const payload = getOrdersPayload();
