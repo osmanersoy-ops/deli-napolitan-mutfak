@@ -122,8 +122,24 @@ function formatOrder(order) {
     const isReady = readyProductIds.has(pid);
 
     const notes = [];
+    if (p.description && String(p.description).trim()) {
+      notes.push(String(p.description).trim());
+    }
     if (p.productNote && String(p.productNote).trim()) {
-      notes.push(String(p.productNote).trim());
+      const pn = String(p.productNote).trim();
+      if (!notes.includes(pn)) notes.push(pn);
+    }
+    if (p.note && String(p.note).trim()) {
+      const n = String(p.note).trim();
+      if (!notes.includes(n)) notes.push(n);
+    }
+    if (p.notes && String(p.notes).trim()) {
+      const n2 = String(p.notes).trim();
+      if (!notes.includes(n2)) notes.push(n2);
+    }
+    if (p.comment && String(p.comment).trim()) {
+      const c = String(p.comment).trim();
+      if (!notes.includes(c)) notes.push(c);
     }
     if (Array.isArray(p.excludedItems) && p.excludedItems.length > 0) {
       notes.push(p.excludedItems.join(', ') + ' ÇIKAR');
@@ -183,6 +199,20 @@ function formatOrder(order) {
   const readyProducts = allProducts.filter(p => p.isReady).length;
   const allProductsReady = totalProducts > 0 && readyProducts === totalProducts;
 
+  const orderNotes = [];
+  if (order.orderNote && String(order.orderNote).trim()) {
+    orderNotes.push(String(order.orderNote).trim());
+  }
+  if (order.description && String(order.description).trim()) {
+    const od = String(order.description).trim();
+    if (!orderNotes.includes(od)) orderNotes.push(od);
+  }
+  if (order.note && String(order.note).trim()) {
+    const on = String(order.note).trim();
+    if (!orderNotes.includes(on)) orderNotes.push(on);
+  }
+  const fullOrderNote = orderNotes.length > 0 ? orderNotes.join(' • ') : null;
+
   return {
     id: order.id,
     orderNumber: order.orderNumber,
@@ -191,6 +221,7 @@ function formatOrder(order) {
     waiterName: order.waiterName || '',
     insertDate,
     secondsElapsed: elapsed,
+    orderNote: fullOrderNote,
     products: allProducts, // Servis ekranı için TÜM ürünler (içecek, salata, tatlı dahil)
     pizzas: pizzaProducts,  // Mutfak ekranı için YALNIZCA pizzalar
     pizzaCount: totalPizzas,

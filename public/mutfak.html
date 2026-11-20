@@ -47,6 +47,14 @@
     .order-new-enter {
       animation: slide-in-left 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
+    @keyframes card-fade-out {
+      0% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(0.92); }
+    }
+    .order-exit {
+      animation: card-fade-out 0.3s ease-out forwards;
+      pointer-events: none;
+    }
     ::-webkit-scrollbar {
       height: 6px;
       width: 6px;
@@ -122,6 +130,38 @@
     let isFirstLoad = true;
     let lastRenderSignature = null;
     const renderedCardIds = new Set();
+    const kitchenDismissedOrders = new Set();
+
+    // Mutfak ekranında kapatılan adisyonları hafızadan yükle
+    try {
+      const savedDismissed = localStorage.getItem('deli_mutfak_dismissed');
+      if (savedDismissed) {
+        JSON.parse(savedDismissed).forEach(id => kitchenDismissedOrders.add(Number(id)));
+      }
+    } catch (e) {}
+
+    // SADECE MUTFAK EKRANINDAN ADİSYONU KAPAT (Servis ekranına etki etmez!)
+    function dismissKitchenOrder(orderId) {
+      const numId = Number(orderId);
+      const card = document.getElementById(`order-card-${orderId}`);
+      if (card) {
+        card.classList.add('order-exit');
+      }
+
+      kitchenDismissedOrders.add(numId);
+      try {
+        localStorage.setItem('deli_mutfak_dismissed', JSON.stringify([...kitchenDismissedOrders]));
+      } catch (e) {}
+
+      setTimeout(() => {
+        orders = orders.filter(o => Number(o.id) !== numId);
+        try {
+          localStorage.setItem('deli_mutfak_orders', JSON.stringify(orders));
+        } catch (e) {}
+        lastRenderSignature = computeOrdersSignature(orders);
+        renderOrders();
+      }, 300);
+    }
 
     // Ses Bildirimi (AudioContext ile fırın gong sesi)
     function playKitchenChime() {
@@ -198,12 +238,14 @@
       return score >= 6.5; // 7 ve üzeri pizza veya notlu 5+ pizza
     }
 
-    // İmzaya hazır olan pizzaları da ekle (Servis ekranından hazır basılınca Mutfak anında görsün!)
+    // İmzaya hazır olan pizzaları ve kapatılmış adisyonları da ekle
     function computeOrdersSignature(ordersList) {
-      return ordersList.map(o => {
-        const readySig = (o.pizzas || []).map(p => `${p.id}:${p.isReady ? 1 : 0}`).join(',');
-        return `${o.id}_${readySig}`;
-      }).join('|');
+      return ordersList
+        .filter(o => !kitchenDismissedOrders.has(Number(o.id)))
+        .map(o => {
+          const readySig = (o.pizzas || []).map(p => `${p.id}:${p.isReady ? 1 : 0}:${p.note || ''}`).join(',');
+          return `${o.id}_${readySig}_${o.orderNote || ''}`;
+        }).join('|');
     }
 
     // ==========================================
@@ -214,8 +256,8 @@
       const emptyState = document.getElementById('empty-state');
       const totalPizzasEl = document.getElementById('total-pizzas-count');
 
-      // SADECE İÇİNDE PİZZA OLAN ADİSYONLARI MUTFAK EKRANINA BAS
-      const kitchenOrders = orders.filter(o => o.pizzas && o.pizzas.length > 0);
+      // SADECE İÇİNDE PİZZA OLAN VE MUTFAKTA KAPATILMAMIŞ ADİSYONLARI MUTFAK EKRANINA BAS
+      const kitchenOrders = orders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0);
 
       // KURAL: En eski sipariş sol üst başta (ilk sırada), son gelen sağa geçsin (FIFO)
       kitchenOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
@@ -265,18 +307,26 @@
                   : 'border-slate-200 hover:border-slate-300'
             } ${isNew ? 'order-new-enter' : ''}"
           >
-            <!-- BAŞLIK: MASA ADI + ADİSYON NO + BÜYÜK SÜRE SAYACI -->
+            <!-- BAŞLIK: MASA ADI + ADİSYON NO + KIRMIZI KAPAT BUTONU + SÜRE SAYACI -->
             <div class="px-2.5 py-1.5 bg-slate-50 border-b border-slate-200 flex-shrink-0">
               <div class="flex items-center justify-between gap-1.5">
                 
-                <!-- SOL: Masa Adı (1 Metreden Net Okunur) & Adisyon No -->
+                <!-- SOL: Masa Adı (1 Metreden Net Okunur) & Adisyon No & Mutfaktan Kapat Çarpısı -->
                 <div class="flex items-center gap-1.5 flex-wrap min-w-0">
-                  <h2 class="text-base md:text-lg font-black text-slate-950 tracking-tight leading-none truncate max-w-[135px]" title="${order.tableName}">
+                  <h2 class="text-base md:text-lg font-black text-slate-950 tracking-tight leading-none truncate max-w-[130px]" title="${order.tableName}">
                     ${order.tableName}
                   </h2>
                   <span class="text-xs md:text-sm font-bold text-slate-500">
                     #${order.orderNumber}
                   </span>
+                  <!-- KIRMIZI YUVARLAK İÇİNDE ÇARPI BUTONU (Sadece Mutfak Ekranından Düşürür, Servise Dokunmaz) -->
+                  <button 
+                    onclick="dismissKitchenOrder(${order.id})" 
+                    title="Bu siparişi sadece mutfak ekranından kapat (servis ekranına etki etmez)"
+                    class="w-6 h-6 md:w-7 md:h-7 rounded-full bg-red-600 hover:bg-red-700 active:scale-90 text-white flex items-center justify-center font-black text-xs md:text-sm shadow-xs transition-all border border-red-700 flex-shrink-0 cursor-pointer ml-0.5"
+                  >
+                    ✕
+                  </button>
                   ${orderTypeBadge}
                 </div>
 
@@ -292,6 +342,14 @@
 
               </div>
             </div>
+
+            <!-- ADİSYON NOTU (Varsa) -->
+            ${order.orderNote ? `
+              <div class="px-2.5 py-1 bg-amber-50 border-b border-amber-300 text-amber-950 text-xs font-black flex items-center gap-1.5 flex-shrink-0">
+                <span class="text-sm">📝</span>
+                <span class="truncate" title="${order.orderNote}">Adisyon Notu: ${order.orderNote}</span>
+              </div>
+            ` : ''}
 
             <!-- PİZZA LİSTESİ: YALNIZCA PİZZALAR, KATEGORİ YOK, FIRINDA YOK (1 METREDEN OKUNUR) -->
             <div class="p-2 space-y-1.5 flex-1 overflow-y-auto bg-white">
@@ -330,11 +388,11 @@
                         ` : ''}
                       </div>
 
-                      <!-- ÖZEL PİZZA NOTU (1 Metreden Uyaran Kırmızı Kutu) -->
+                      <!-- ÖZEL PİZZA NOTU (1 Metreden Uyaran Belirgin Kırmızı Kutu) -->
                       ${pizza.note ? `
-                        <div class="mt-1 inline-flex items-center gap-1 bg-rose-50 border border-rose-300 text-rose-900 px-2 py-0.5 rounded-md text-xs font-black tracking-wide truncate max-w-full">
-                          <span>⚠️</span>
-                          <span class="truncate">${pizza.note}</span>
+                        <div class="mt-1 flex items-start gap-1 bg-rose-50 border border-rose-300 text-rose-950 px-2 py-0.5 rounded-md text-xs md:text-sm font-black tracking-wide shadow-2xs max-w-full">
+                          <span class="text-xs md:text-sm leading-none flex-shrink-0">⚠️</span>
+                          <span class="break-words leading-tight" title="${pizza.note}">${pizza.note}</span>
                         </div>
                       ` : ''}
                     </div>
@@ -415,9 +473,19 @@
           }
         });
 
+        // Adisyo'da tamamen kapanmış masaları mutfak dismiss hafızasından da temizle
+        kitchenDismissedOrders.forEach(id => {
+          if (!currentIds.has(id)) {
+            kitchenDismissedOrders.delete(id);
+          }
+        });
+        try {
+          localStorage.setItem('deli_mutfak_dismissed', JSON.stringify([...kitchenDismissedOrders]));
+        } catch (e) {}
+
         const statusEl = document.getElementById('sync-status');
         if (statusEl) {
-          const kitchenCount = serverOrders.filter(o => o.pizzas && o.pizzas.length > 0).length;
+          const kitchenCount = serverOrders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0).length;
           const syncTime = data.lastSyncTime || 'Canlı';
           statusEl.textContent = `Adisyo Canlı (${kitchenCount} Masa • ${syncTime})`;
         }

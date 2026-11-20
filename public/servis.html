@@ -386,6 +386,14 @@
               </div>
             </div>
 
+            <!-- ADİSYON NOTU (Varsa) -->
+            ${order.orderNote ? `
+              <div class="px-2.5 py-1 bg-amber-50 border-b border-amber-300 text-amber-950 text-xs font-black flex items-center gap-1.5 flex-shrink-0">
+                <span class="text-sm">📝</span>
+                <span class="truncate" title="${order.orderNote}">Adisyon Notu: ${order.orderNote}</span>
+              </div>
+            ` : ''}
+
             <!-- ÜRÜN LİSTESİ: SATIRLAR %10 BÜYÜTÜLDÜ, FONT BÜYÜTÜLDÜ, BUTON GENİŞLETİLDİ -->
             <div class="p-2 space-y-1 flex-1 overflow-y-auto bg-white">
               ${sortedProducts.map((item, index) => {
@@ -424,9 +432,10 @@
                         </span>
 
                         ${item.note ? `
-                          <span class="text-[10px] md:text-[11px] font-bold text-rose-700 truncate block whitespace-nowrap leading-none mt-0.5" title="${item.note}">
-                            ⚠️ ${item.note}
-                          </span>
+                          <div class="mt-0.5 inline-flex items-center gap-1 bg-rose-50 border border-rose-300 text-rose-950 px-1.5 py-0.2 rounded text-[11px] font-black tracking-tight max-w-full">
+                            <span>⚠️</span>
+                            <span class="truncate" title="${item.note}">${item.note}</span>
+                          </div>
                         ` : ''}
                       </div>
                     </div>
