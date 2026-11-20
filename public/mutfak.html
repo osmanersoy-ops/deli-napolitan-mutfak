@@ -333,6 +333,18 @@
       }).join('');
     }
 
+    // Sayfa açıldığında önbellekteki siparişleri derhal ekrana bas
+    try {
+      const saved = localStorage.getItem('deli_mutfak_orders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          orders = parsed;
+          renderOrders();
+        }
+      }
+    } catch (e) {}
+
     async function syncOrders() {
       try {
         const res = await fetch('/api/orders?_t=' + Date.now(), {
@@ -342,6 +354,21 @@
         if (!res.ok) throw new Error('API Hatası');
         const data = await res.json();
         const serverOrders = data.orders || [];
+
+        // KORUMA: Eğer sunucu kota korumasındaysa ve 0 sipariş döndüyse ama ekranda adisyonlarımız varsa SİLME!
+        if (serverOrders.length === 0 && orders.length > 0 && data.status && data.status.includes('kota')) {
+          const statusEl = document.getElementById('sync-status');
+          if (statusEl) {
+            statusEl.textContent = 'Adisyo Kota Beklemede (Siparişler Korunuyor)';
+          }
+          return;
+        }
+
+        if (serverOrders.length > 0) {
+          try {
+            localStorage.setItem('deli_mutfak_orders', JSON.stringify(serverOrders));
+          } catch (e) {}
+        }
 
         const currentIds = new Set(serverOrders.map(o => o.id));
 
@@ -388,7 +415,7 @@
     }
 
     syncOrders();
-    setInterval(syncOrders, 1500);
+    setInterval(syncOrders, 3000);
 
     setInterval(() => {
       orders.forEach(order => {

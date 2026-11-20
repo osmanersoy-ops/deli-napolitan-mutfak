@@ -18,6 +18,24 @@ let readyProductIds = new Set();
 
 const CACHE_FILE = '/tmp/kds_cached_orders.json';
 const READY_FILE = '/tmp/kds_ready.json';
+const LAST_CALL_FILE = '/tmp/kds_last_call.json';
+
+function getLastAdisyoCallTime() {
+  try {
+    if (fs.existsSync(LAST_CALL_FILE)) {
+      const val = Number(fs.readFileSync(LAST_CALL_FILE, 'utf8'));
+      if (val > 0) return val;
+    }
+  } catch (e) {}
+  return lastFetchTime || 0;
+}
+
+function setLastAdisyoCallTime(ts) {
+  lastFetchTime = ts;
+  try {
+    fs.writeFileSync(LAST_CALL_FILE, String(ts), 'utf8');
+  } catch (e) {}
+}
 
 // Yerel /tmp disk önbelleğini yükle
 function loadDiskCache() {
@@ -40,10 +58,12 @@ function loadDiskCache() {
   } catch (e) {}
 }
 
-// Yerel /tmp disk önbelleğine kaydet
+// Yerel /tmp disk önbelleğine kaydet (boş diziyle üzerine yazmayı engelle)
 function saveDiskCache() {
   try {
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(cachedOrders), 'utf8');
+    if (Array.isArray(cachedOrders) && cachedOrders.length > 0) {
+      fs.writeFileSync(CACHE_FILE, JSON.stringify(cachedOrders), 'utf8');
+    }
   } catch (e) {}
   try {
     fs.writeFileSync(READY_FILE, JSON.stringify(Array.from(readyProductIds)), 'utf8');
@@ -182,7 +202,7 @@ function formatOrder(order) {
   };
 }
 
-// Tek bir siparişi ID ile Adisyo'dan çek (Limit: 1 saniyede 4 çağrı)
+// Tek bir siparişi ID ile Adisyo'dan çek
 async function fetchOrderById(orderId) {
   try {
     const url = `${ADISYO_BASE_URL}/Order/${orderId}`;
@@ -205,17 +225,18 @@ async function fetchOrderById(orderId) {
   return null;
 }
 
-// Arka plan yedek tarama (En az 25 saniye aralıkla)
+// Arka plan yedek tarama (En az 25 saniye aralıkla ve kota korumalı)
 async function fetchFromAdisyo(force = false) {
   const now = Date.now();
+  const lastCall = getLastAdisyoCallTime();
 
-  if (!force && now - lastFetchTime < 25000) {
+  if (!force && (now - lastCall < 25000)) {
     return cachedOrders;
   }
 
   if (isFetching) return cachedOrders;
   isFetching = true;
-  lastFetchTime = Date.now();
+  setLastAdisyoCallTime(Date.now());
 
   const url = `${ADISYO_BASE_URL}/RecentOrders?orderType=TakeAway,Table,Retail&onlyRestaurantCourier=false`;
   try {
@@ -235,7 +256,7 @@ async function fetchFromAdisyo(force = false) {
     if (response.ok && Array.isArray(data.data)) {
       cachedOrders = data.data;
       saveDiskCache();
-      lastFetchTime = Date.now();
+      setLastAdisyoCallTime(Date.now());
       try {
         lastSyncTimeString = new Intl.DateTimeFormat('tr-TR', {
           timeZone: 'Europe/Istanbul',
@@ -244,10 +265,12 @@ async function fetchFromAdisyo(force = false) {
       } catch (e) {
         lastSyncTimeString = new Date().toLocaleTimeString('tr-TR');
       }
-      lastSyncStatus = 'Canlı Webhook & API Bağlı';
+      lastSyncStatus = 'Canlı Bağlı';
     } else if (text.includes('601')) {
-      lastFetchTime = Date.now();
+      // 30 saniye boyunca Adisyo kotasını ferahlatmak için bekleme uygula
+      setLastAdisyoCallTime(Date.now() + 15000);
       lastSyncStatus = 'Adisyo kota koruması (25s)';
+      loadDiskCache();
     }
   } catch (err) {
     console.error('[Adisyo Fetch Error]', err);
@@ -281,7 +304,7 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Anti-cache headers (Tarayıcı ve ara sunucu önbelleğini engelle)
+  // Anti-cache headers
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
@@ -348,7 +371,9 @@ module.exports = async function handler(req, res) {
 
         if (isFinished) {
           cachedOrders = cachedOrders.filter(o => o.id !== orderId);
-          saveDiskCache();
+          try {
+            fs.writeFileSync(CACHE_FILE, JSON.stringify(cachedOrders), 'utf8');
+          } catch (e) {}
           continue;
         }
 
@@ -417,7 +442,6 @@ module.exports = async function handler(req, res) {
     const oid = Number(body.orderId);
     if (oid) {
       try {
-        // Adisyo'ya resmi Prepared komutu gönder (Masa mavi olur ve Adisyo mutfağından düşer!)
         await fetch(`${ADISYO_BASE_URL}/Prepared`, {
           method: 'POST',
           headers: {
@@ -436,7 +460,9 @@ module.exports = async function handler(req, res) {
 
     // Bizim kuyruktan da anında kaldır
     cachedOrders = cachedOrders.filter(o => o.id !== oid);
-    saveDiskCache();
+    try {
+      fs.writeFileSync(CACHE_FILE, JSON.stringify(cachedOrders), 'utf8');
+    } catch (e) {}
     return res.status(200).json({ success: true, orderId: oid });
   }
 
@@ -452,7 +478,8 @@ module.exports = async function handler(req, res) {
   // 5. GENEL SORGULAMA (GET /api/orders)
   // ==========================================
   const now = Date.now();
-  if (now - lastFetchTime >= 25000 || cachedOrders.length === 0) {
+  const lastCall = getLastAdisyoCallTime();
+  if (now - lastCall >= 25000) {
     await fetchFromAdisyo(false);
   }
 
