@@ -117,9 +117,18 @@
     let previousOrderIds = new Set();
     let isFirstLoad = true;
     let lastRenderSignature = null;
-    const localReadyOverrides = new Map();
+    const localReadySet = new Set();
+    const recentlyUnready = new Map(); // pid -> timestamp (son 30 sn'de elle un-ready yapılanlar)
     const renderedCardIds = new Set();
     const dismissedOrders = new Set();
+
+    // Hafızadan hazır olan ürünleri yükle (cihazlar arası ve yenilemelerde koruma)
+    try {
+      const savedReady = localStorage.getItem('deli_servis_ready_pids');
+      if (savedReady) {
+        JSON.parse(savedReady).forEach(id => localReadySet.add(String(id)));
+      }
+    } catch (e) {}
 
     function formatTime(seconds) {
       const mins = Math.floor(seconds / 60);
@@ -200,28 +209,39 @@
     // 1. ÜRÜN HAZIR BUTONU (Tek Tek Hazırla)
     // ==========================================
     async function toggleProductReady(orderId, productId) {
+      const pid = String(productId);
       const order = orders.find(o => o.id === orderId);
       if (!order) return;
-      const product = (order.products || []).find(p => String(p.id) === String(productId));
+      const product = (order.products || []).find(p => String(p.id) === pid);
       if (!product) return;
 
       const newReadyState = !product.isReady;
       product.isReady = newReadyState;
 
-      // 15 saniyelik yerel kilit (Optimistic Lock)
-      localReadyOverrides.set(String(productId), {
-        isReady: newReadyState,
-        timestamp: Date.now()
-      });
+      // Yerel kalıcı durum güncellemesi (ASLA süreyle silinmez!)
+      if (newReadyState) {
+        localReadySet.add(pid);
+        recentlyUnready.delete(pid);
+      } else {
+        localReadySet.delete(pid);
+        recentlyUnready.set(pid, Date.now());
+      }
+
+      try {
+        localStorage.setItem('deli_servis_ready_pids', JSON.stringify([...localReadySet]));
+      } catch (e) {}
 
       renderOrders();
 
-      // Sunucuya bildir (Mutfak ekranına anında yansısın)
+      // Sunucuya ve diğer tüm açık ekranlara anında bildir
       try {
         await fetch('/api/orders?action=toggle-ready', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ productId, isReady: newReadyState })
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-ready-ids': [...localReadySet].join(',')
+          },
+          body: JSON.stringify({ productId: pid, isReady: newReadyState })
         });
       } catch (e) {}
     }
@@ -234,6 +254,15 @@
       const card = document.getElementById(`servis-card-${orderId}`);
       if (card) {
         card.classList.add('order-exit');
+      }
+
+      // Kapatılan adisyondaki ürünleri hazır hafızasından temizle
+      const closedOrder = orders.find(o => o.id === orderId);
+      if (closedOrder && Array.isArray(closedOrder.products)) {
+        closedOrder.products.forEach(p => localReadySet.delete(String(p.id)));
+        try {
+          localStorage.setItem('deli_servis_ready_pids', JSON.stringify([...localReadySet]));
+        } catch (e) {}
       }
 
       dismissedOrders.add(orderId);
@@ -455,7 +484,11 @@
       try {
         const res = await fetch('/api/orders?_t=' + Date.now(), {
           cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+          headers: { 
+            'Cache-Control': 'no-cache', 
+            'Pragma': 'no-cache',
+            'x-ready-ids': [...localReadySet].join(',')
+          }
         });
         if (!res.ok) throw new Error('API Hatası');
         const data = await res.json();
@@ -489,18 +522,44 @@
           }
         });
 
+        // 1. Sunucudan ve diğer cihazlardan gelen hazır ürün listesini birleştir
+        const serverReadyList = Array.isArray(data.readyProductIds) ? data.readyProductIds : [];
         const now = Date.now();
+
+        // Son 30 sn'de elle unready yapılanların süresi dolduysa temizle
+        recentlyUnready.forEach((ts, id) => {
+          if (now - ts > 30000) recentlyUnready.delete(id);
+        });
+
+        serverReadyList.forEach(id => {
+          const sid = String(id);
+          if (!recentlyUnready.has(sid)) {
+            localReadySet.add(sid);
+          }
+        });
+
+        // Kapanmış siparişlerin artık ekranda olmayan ürünlerini localReadySet'ten süpür
+        const activePids = new Set();
+        serverOrders.forEach(so => {
+          (so.products || []).forEach(p => activePids.add(String(p.id)));
+        });
+        localReadySet.forEach(pid => {
+          if (!activePids.has(pid)) localReadySet.delete(pid);
+        });
+
+        try {
+          localStorage.setItem('deli_servis_ready_pids', JSON.stringify([...localReadySet]));
+        } catch (e) {}
+
+        // 2. Tüm ürünlerin hazır durumunu kalıcı yerel set ile senkronize et (ASLA geriye dönmez!)
         serverOrders.forEach(so => {
           so.secondsElapsed = getOrderSeconds(so);
           (so.products || []).forEach(p => {
             const pid = String(p.id);
-            if (localReadyOverrides.has(pid)) {
-              const item = localReadyOverrides.get(pid);
-              if (now - item.timestamp < 15000) {
-                p.isReady = item.isReady;
-              } else {
-                localReadyOverrides.delete(pid);
-              }
+            if (localReadySet.has(pid)) {
+              p.isReady = true;
+            } else if (p.isReady && !recentlyUnready.has(pid)) {
+              localReadySet.add(pid);
             }
           });
         });

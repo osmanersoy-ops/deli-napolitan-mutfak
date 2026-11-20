@@ -15,6 +15,7 @@ let lastSyncTimeString = null;
 let lastSyncStatus = 'Başlatılıyor...';
 let isFetching = false;
 let readyProductIds = new Set();
+const unreadyMap = new Map(); // pid -> timestamp
 
 const CACHE_FILE = '/tmp/kds_cached_orders.json';
 const READY_FILE = '/tmp/kds_ready.json';
@@ -325,6 +326,7 @@ function getOrdersPayload() {
     orders: formatted,
     count: formatted.length,
     rawCount: cachedOrders.length,
+    readyProductIds: Array.from(readyProductIds),
     lastSyncTime: lastSyncTimeString || 'Canlı',
     status: lastSyncStatus
   };
@@ -344,6 +346,22 @@ module.exports = async function handler(req, res) {
   }
 
   loadDiskCache();
+
+  // İstemcilerden gelen bilinen hazır ürün ID'lerini birleştir (Multi-device / multi-container sync)
+  const clientReadyHeader = req.headers['x-ready-ids'] || req.query?.ready;
+  if (clientReadyHeader) {
+    const now = Date.now();
+    const ids = String(clientReadyHeader).split(',').map(s => s.trim()).filter(Boolean);
+    let changed = false;
+    ids.forEach(id => {
+      const unreadyTs = unreadyMap.get(id) || 0;
+      if (now - unreadyTs > 30000 && !readyProductIds.has(id)) {
+        readyProductIds.add(id);
+        changed = true;
+      }
+    });
+    if (changed) saveDiskCache();
+  }
 
   const url = req.url || '';
   const body = req.body || {};
@@ -447,21 +465,28 @@ module.exports = async function handler(req, res) {
   // ==========================================
   if (action === 'toggle-ready' || body.productId) {
     const pid = String(body.productId);
-    if (typeof body.isReady === 'boolean') {
-      if (body.isReady) {
-        readyProductIds.add(pid);
-      } else {
-        readyProductIds.delete(pid);
-      }
+    if (body.isReady === true) {
+      readyProductIds.add(pid);
+      unreadyMap.delete(pid);
+    } else if (body.isReady === false) {
+      readyProductIds.delete(pid);
+      unreadyMap.set(pid, Date.now());
     } else {
       if (readyProductIds.has(pid)) {
         readyProductIds.delete(pid);
+        unreadyMap.set(pid, Date.now());
       } else {
         readyProductIds.add(pid);
+        unreadyMap.delete(pid);
       }
     }
     saveDiskCache();
-    return res.status(200).json({ success: true, productId: pid, isReady: readyProductIds.has(pid) });
+    return res.status(200).json({ 
+      success: true, 
+      productId: pid, 
+      isReady: readyProductIds.has(pid),
+      readyProductIds: Array.from(readyProductIds)
+    });
   }
 
   // ==========================================
@@ -487,11 +512,18 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    // O siparişe ait ürünleri de hazır hafızasından temizle
+    const finishedOrder = cachedOrders.find(o => o.id === oid);
+    if (finishedOrder && Array.isArray(finishedOrder.products)) {
+      finishedOrder.products.forEach(p => {
+        readyProductIds.delete(String(p.id));
+        unreadyMap.delete(String(p.id));
+      });
+    }
+
     // Bizim kuyruktan da anında kaldır
     cachedOrders = cachedOrders.filter(o => o.id !== oid);
-    try {
-      fs.writeFileSync(CACHE_FILE, JSON.stringify(cachedOrders), 'utf8');
-    } catch (e) {}
+    saveDiskCache();
     return res.status(200).json({ success: true, orderId: oid });
   }
 
