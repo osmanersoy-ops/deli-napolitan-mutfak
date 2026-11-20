@@ -363,14 +363,16 @@
                       : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
                   }">
                     
-                    <!-- ADET KUTUSU: BÜYÜK VE NET (1 Metreden 1x mi 2x mi Fırıncı Anında Görür) -->
-                    <span class="text-sm md:text-base font-black px-2 py-0.5 rounded-md flex-shrink-0 leading-none ${
-                      isReady 
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 line-through' 
-                        : 'bg-amber-100 text-amber-950 border border-amber-300'
-                    }">
-                      ${pizza.qty}x
-                    </span>
+                    <!-- ADET KUTUSU: 1x kaldırıldı, sadece 2x ve üzeri çoklu adetlerde fırıncıya uyarı olarak gösterilir -->
+                    ${pizza.qty > 1 ? `
+                      <span class="text-sm md:text-base font-black px-2 py-0.5 rounded-md flex-shrink-0 leading-none ${
+                        isReady 
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 line-through' 
+                          : 'bg-amber-100 text-amber-950 border border-amber-300'
+                      }">
+                        ${pizza.qty}x
+                      </span>
+                    ` : ''}
 
                     <!-- PİZZA İSMİ VE NOTLAR -->
                     <div class="min-w-0 flex-1">
