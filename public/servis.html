@@ -470,14 +470,15 @@
       }).join('');
     }
 
-    // Sayfa açıldığında önbellekteki siparişleri derhal ekrana bas
+    // Sayfa açıldığında önbellekteki siparişleri derhal ekrana bas (3 saatten eskileri süpür)
     try {
       const saved = localStorage.getItem('deli_servis_orders');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          orders = parsed;
-          renderOrders();
+          orders = parsed.filter(o => getOrderSeconds(o) < 10800);
+          if (orders.length > 0) renderOrders();
+          else localStorage.setItem('deli_servis_orders', JSON.stringify([]));
         }
       }
     } catch (e) {}
@@ -494,22 +495,14 @@
         });
         if (!res.ok) throw new Error('API Hatası');
         const data = await res.json();
-        const serverOrders = data.orders || [];
+        const rawServerOrders = data.orders || [];
 
-        // KORUMA: Eğer sunucu kota korumasındaysa ve 0 sipariş döndüyse ama ekranda adisyonlarımız varsa SİLME!
-        if (serverOrders.length === 0 && orders.length > 0 && data.status && data.status.includes('kota')) {
-          const statusEl = document.getElementById('sync-status');
-          if (statusEl) {
-            statusEl.textContent = 'Adisyo Kota Beklemede (Siparişler Korunuyor)';
-          }
-          return;
-        }
+        // 3 saatten (180 dakika) eski veya dünden kalmış siparişleri kesinlikle kabul etme
+        const serverOrders = rawServerOrders.filter(o => getOrderSeconds(o) < 10800);
 
-        if (serverOrders.length > 0) {
-          try {
-            localStorage.setItem('deli_servis_orders', JSON.stringify(serverOrders));
-          } catch (e) {}
-        }
+        try {
+          localStorage.setItem('deli_servis_orders', JSON.stringify(serverOrders));
+        } catch (e) {}
 
         const currentIds = new Set(serverOrders.map(o => o.id));
 

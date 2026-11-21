@@ -43,8 +43,16 @@ function loadDiskCache() {
   try {
     if (fs.existsSync(CACHE_FILE)) {
       const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-      if (Array.isArray(data) && data.length > 0 && cachedOrders.length === 0) {
-        cachedOrders = data;
+      if (Array.isArray(data)) {
+        const now = Date.now();
+        // 3 saatten eski (dünden kalan) verileri disk önbelleğinden temizle
+        cachedOrders = data.filter(o => {
+          if (!o || !o.insertDate) return false;
+          let dateStr = o.insertDate;
+          if (!dateStr.includes('+') && !dateStr.includes('Z')) dateStr += '+03:00';
+          const dt = new Date(dateStr);
+          return (now - dt.getTime()) < (3 * 3600 * 1000);
+        });
       }
     }
   } catch (e) {}
@@ -59,10 +67,10 @@ function loadDiskCache() {
   } catch (e) {}
 }
 
-// Yerel /tmp disk önbelleğine kaydet (boş diziyle üzerine yazmayı engelle)
+// Yerel /tmp disk önbelleğine kaydet (boş dizi de olsa kaydet ki kapanan siparişler silinsin)
 function saveDiskCache() {
   try {
-    if (Array.isArray(cachedOrders) && cachedOrders.length > 0) {
+    if (Array.isArray(cachedOrders)) {
       fs.writeFileSync(CACHE_FILE, JSON.stringify(cachedOrders), 'utf8');
     }
   } catch (e) {}
@@ -192,6 +200,11 @@ function formatOrder(order) {
     elapsed = 0;
   }
 
+  // 3 saatten (10800 saniye / 180 dakika) eski siparişler dünden kalmış veya kapanmış adisyonlardır; ekrana basılmaz
+  if (elapsed > 10800) {
+    return null;
+  }
+
   const totalPizzas = pizzaProducts.length;
   const readyPizzas = pizzaProducts.filter(p => p.isReady).length;
   const allPizzasReady = totalPizzas > 0 && readyPizzas === totalPizzas;
@@ -286,7 +299,15 @@ async function fetchFromAdisyo(force = false) {
     try { data = JSON.parse(text); } catch (e) {}
 
     if (response.ok && Array.isArray(data.data)) {
-      cachedOrders = data.data;
+      // Sadece son 3 saat içinde açılmış canlı siparişleri al (dünden kalanları süpür)
+      const nowTs = Date.now();
+      cachedOrders = data.data.filter(o => {
+        if (!o || !o.insertDate) return false;
+        let dateStr = o.insertDate;
+        if (!dateStr.includes('+') && !dateStr.includes('Z')) dateStr += '+03:00';
+        const dt = new Date(dateStr);
+        return (nowTs - dt.getTime()) < (3 * 3600 * 1000);
+      });
       saveDiskCache();
       setLastAdisyoCallTime(Date.now());
       try {
@@ -299,9 +320,9 @@ async function fetchFromAdisyo(force = false) {
       }
       lastSyncStatus = 'Canlı Bağlı';
     } else if (text.includes('601')) {
-      // 30 saniye boyunca Adisyo kotasını ferahlatmak için bekleme uygula
-      setLastAdisyoCallTime(Date.now() + 15000);
-      lastSyncStatus = 'Adisyo kota koruması (25s)';
+      // 35 saniye boyunca Adisyo kotasını ferahlatmak için bekleme uygula
+      setLastAdisyoCallTime(Date.now() + 35000);
+      lastSyncStatus = 'Adisyo kota koruması (30s)';
       loadDiskCache();
     }
   } catch (err) {
@@ -540,17 +561,11 @@ module.exports = async function handler(req, res) {
   // ==========================================
   const now = Date.now();
   const lastCall = getLastAdisyoCallTime();
-  if (now - lastCall >= 25000 || (cachedOrders.length === 0 && now - lastCall >= 6000)) {
-    await fetchFromAdisyo(cachedOrders.length === 0);
+  if (now - lastCall >= 25000) {
+    await fetchFromAdisyo(false);
   }
 
   const payload = getOrdersPayload();
-
-  // KRİTİK GÜVENLİK: Eğer Adisyo kota hatası verdiyse ve elimizde sipariş yoksa,
-  // 200 dönüp ekranı sildirme! 429 dön ki istemciler mevcut adisyonları korusun.
-  if (payload.count === 0 && payload.status && payload.status.includes('kota')) {
-    return res.status(429).json({ error: 'Adisyo kota beklemede', status: payload.status });
-  }
 
   return res.status(200).json(payload);
 };
