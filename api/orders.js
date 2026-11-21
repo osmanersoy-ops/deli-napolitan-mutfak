@@ -14,6 +14,9 @@ let lastFetchTime = 0;
 let lastSyncTimeString = null;
 let lastSyncStatus = 'Başlatılıyor...';
 let isFetching = false;
+let lastSyncSuccess = false;
+let lastAdisyoSyncTime = 0;
+let isQuotaProtected = false;
 let readyProductIds = new Set();
 const unreadyMap = new Map(); // pid -> timestamp
 
@@ -43,16 +46,19 @@ function loadDiskCache() {
   try {
     if (fs.existsSync(CACHE_FILE)) {
       const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-      if (Array.isArray(data)) {
+      if (Array.isArray(data) && data.length > 0) {
         const now = Date.now();
         // 3 saatten eski (dünden kalan) verileri disk önbelleğinden temizle
-        cachedOrders = data.filter(o => {
+        const filtered = data.filter(o => {
           if (!o || !o.insertDate) return false;
           let dateStr = o.insertDate;
           if (!dateStr.includes('+') && !dateStr.includes('Z')) dateStr += '+03:00';
           const dt = new Date(dateStr);
           return (now - dt.getTime()) < (3 * 3600 * 1000);
         });
+        if (filtered.length > 0) {
+          cachedOrders = filtered;
+        }
       }
     }
   } catch (e) {}
@@ -67,10 +73,10 @@ function loadDiskCache() {
   } catch (e) {}
 }
 
-// Yerel /tmp disk önbelleğine kaydet (boş dizi de olsa kaydet ki kapanan siparişler silinsin)
-function saveDiskCache() {
+// Yerel /tmp disk önbelleğine kaydet (boş diziyle üzerine yazmayı allowEmpty=true olmadıkça engelle)
+function saveDiskCache(allowEmpty = false) {
   try {
-    if (Array.isArray(cachedOrders)) {
+    if (Array.isArray(cachedOrders) && (cachedOrders.length > 0 || allowEmpty)) {
       fs.writeFileSync(CACHE_FILE, JSON.stringify(cachedOrders), 'utf8');
     }
   } catch (e) {}
@@ -270,12 +276,16 @@ async function fetchOrderById(orderId) {
   return null;
 }
 
-// Arka plan yedek tarama (En az 25 saniye aralıkla ve kota korumalı)
+// Arka plan yedek tarama (En az 35 saniye aralıkla ve kota korumalı)
 async function fetchFromAdisyo(force = false) {
   const now = Date.now();
   const lastCall = getLastAdisyoCallTime();
 
-  if (!force && (now - lastCall < 25000)) {
+  if (!force && (now - lastCall < 35000)) {
+    return cachedOrders;
+  }
+  // Eğer force (Yenile butonu) ise bile en az 10 saniye aralık koy ki ardışık basışlar kotayı aşmasın
+  if (force && (now - lastCall < 10000)) {
     return cachedOrders;
   }
 
@@ -308,8 +318,11 @@ async function fetchFromAdisyo(force = false) {
         const dt = new Date(dateStr);
         return (nowTs - dt.getTime()) < (3 * 3600 * 1000);
       });
-      saveDiskCache();
+      saveDiskCache(true);
       setLastAdisyoCallTime(Date.now());
+      lastSyncSuccess = true;
+      isQuotaProtected = false;
+      lastAdisyoSyncTime = Date.now();
       try {
         lastSyncTimeString = new Intl.DateTimeFormat('tr-TR', {
           timeZone: 'Europe/Istanbul',
@@ -319,14 +332,21 @@ async function fetchFromAdisyo(force = false) {
         lastSyncTimeString = new Date().toLocaleTimeString('tr-TR');
       }
       lastSyncStatus = 'Canlı Bağlı';
-    } else if (text.includes('601')) {
-      // 35 saniye boyunca Adisyo kotasını ferahlatmak için bekleme uygula
-      setLastAdisyoCallTime(Date.now() + 35000);
-      lastSyncStatus = 'Adisyo kota koruması (30s)';
+    } else if (text.includes('601') || response.status === 400 || response.status === 429) {
+      // 45 saniye boyunca Adisyo kotasını ferahlatmak için bekleme uygula
+      setLastAdisyoCallTime(Date.now() + 45000);
+      lastSyncStatus = 'Adisyo kota koruması (45s)';
+      isQuotaProtected = true;
+      lastSyncSuccess = false;
+      loadDiskCache();
+    } else {
+      lastSyncSuccess = false;
       loadDiskCache();
     }
   } catch (err) {
     console.error('[Adisyo Fetch Error]', err);
+    lastSyncSuccess = false;
+    loadDiskCache();
   } finally {
     isFetching = false;
   }
@@ -349,18 +369,22 @@ function getOrdersPayload() {
     rawCount: cachedOrders.length,
     readyProductIds: Array.from(readyProductIds),
     lastSyncTime: lastSyncTimeString || 'Canlı',
-    status: lastSyncStatus
+    status: lastSyncStatus,
+    isQuotaProtected: isQuotaProtected || (lastSyncStatus && lastSyncStatus.includes('kota')),
+    lastSyncSuccess: lastSyncSuccess,
+    hasSyncedWithAdisyo: (lastAdisyoSyncTime > 0)
   };
 }
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-ready-ids');
 
-  // Anti-cache & edge protection
-  res.setHeader('Cache-Control', 'public, s-maxage=3, stale-while-revalidate=5');
+  // Anti-cache & edge protection (Ekranların önbelleğe takılmasını engelle)
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -381,7 +405,7 @@ module.exports = async function handler(req, res) {
         changed = true;
       }
     });
-    if (changed) saveDiskCache();
+    if (changed) saveDiskCache(false);
   }
 
   const url = req.url || '';
@@ -544,7 +568,7 @@ module.exports = async function handler(req, res) {
 
     // Bizim kuyruktan da anında kaldır
     cachedOrders = cachedOrders.filter(o => o.id !== oid);
-    saveDiskCache();
+    saveDiskCache(true);
     return res.status(200).json({ success: true, orderId: oid });
   }
 
@@ -561,11 +585,20 @@ module.exports = async function handler(req, res) {
   // ==========================================
   const now = Date.now();
   const lastCall = getLastAdisyoCallTime();
-  if (now - lastCall >= 25000) {
+  if (now - lastCall >= 35000) {
     await fetchFromAdisyo(false);
   }
 
   const payload = getOrdersPayload();
+
+  // KRİTİK GÜVENLİK: Eğer Adisyo kotasındaysak ve sıfır sipariş varsa:
+  // İstemcilere 429 kota koruması ile dön ki istemciler mevcut adisyonları ASLA silmesin!
+  if (payload.count === 0 && (payload.isQuotaProtected || (payload.status && payload.status.includes('kota')))) {
+    return res.status(429).json({
+      ...payload,
+      error: 'Adisyo kota korumasında (beklemede)'
+    });
+  }
 
   return res.status(200).json(payload);
 };

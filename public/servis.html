@@ -483,6 +483,137 @@
       }
     } catch (e) {}
 
+    let consecutiveZeroCount = 0;
+
+    function processOrdersData(data) {
+      if (!data) return;
+
+      const rawServerOrders = Array.isArray(data.orders) ? data.orders : [];
+      // 3 saatten (180 dakika) eski veya dünden kalmış siparişleri kesinlikle kabul etme
+      const serverOrders = rawServerOrders.filter(o => getOrderSeconds(o) < 10800);
+
+      // ==========================================
+      // KORUMA 1: KOTA KORUMASI VE SENKRONİZASYON HATASI KORUMASI
+      // Eğer Adisyo kota sınırındaysa (601) veya henüz senkronize olunamadıysa,
+      // ve ekranda aktif siparişlerimiz varsa ASLA SİLME!
+      // ==========================================
+      const isQuota = data.isQuotaProtected || (data.status && data.status.includes('kota'));
+      if (serverOrders.length === 0 && orders.length > 0) {
+        if (isQuota || data.lastSyncSuccess === false) {
+          const statusEl = document.getElementById('sync-status');
+          if (statusEl) {
+            const visibleCount = orders.filter(o => !dismissedOrders.has(o.id)).length;
+            statusEl.textContent = `Adisyo Kota Beklemede (${visibleCount} Masa Korunuyor)`;
+          }
+          return;
+        }
+
+        // ==========================================
+        // KORUMA 2: ANİ SIFIRLANMA TEYİDİ (ÇİFT ONAY KİLİDİ)
+        // Canlı restoranda tüm masalar aynı anda kapanmaz.
+        // Tek bir geçici poll'de 0 gelirse en az 2 ardışık onay bekle.
+        // ==========================================
+        consecutiveZeroCount++;
+        if (consecutiveZeroCount < 2) {
+          const statusEl = document.getElementById('sync-status');
+          if (statusEl) {
+            const visibleCount = orders.filter(o => !dismissedOrders.has(o.id)).length;
+            statusEl.textContent = `Adisyo Doğrulanıyor (${visibleCount} Masa • ${data.lastSyncTime || 'Canlı'})`;
+          }
+          return;
+        }
+      } else {
+        consecutiveZeroCount = 0;
+      }
+
+      // ==========================================
+      // KORUMA 3: LOCALSTORAGE KORUMASI
+      // ==========================================
+      if (serverOrders.length > 0) {
+        try {
+          localStorage.setItem('deli_servis_orders', JSON.stringify(serverOrders));
+        } catch (e) {}
+      } else if (consecutiveZeroCount >= 2 && data.lastSyncSuccess) {
+        try {
+          localStorage.setItem('deli_servis_orders', JSON.stringify([]));
+        } catch (e) {}
+      }
+
+      const currentIds = new Set(serverOrders.map(o => o.id));
+
+      dismissedOrders.forEach(dismissedId => {
+        if (!currentIds.has(dismissedId)) {
+          dismissedOrders.delete(dismissedId);
+        }
+      });
+      renderedCardIds.forEach(renderedId => {
+        if (!currentIds.has(renderedId)) {
+          renderedCardIds.delete(renderedId);
+        }
+      });
+
+      // 1. Sunucudan ve diğer cihazlardan gelen hazır ürün listesini birleştir
+      const serverReadyList = Array.isArray(data.readyProductIds) ? data.readyProductIds : [];
+      const now = Date.now();
+
+      // Son 30 sn'de elle unready yapılanların süresi dolduysa temizle
+      recentlyUnready.forEach((ts, id) => {
+        if (now - ts > 30000) recentlyUnready.delete(id);
+      });
+
+      serverReadyList.forEach(id => {
+        const sid = String(id);
+        if (!recentlyUnready.has(sid)) {
+          localReadySet.add(sid);
+        }
+      });
+
+      // Kapanmış siparişlerin artık ekranda olmayan ürünlerini localReadySet'ten süpür
+      const activePids = new Set();
+      serverOrders.forEach(so => {
+        (so.products || []).forEach(p => activePids.add(String(p.id)));
+      });
+      localReadySet.forEach(pid => {
+        if (!activePids.has(pid)) localReadySet.delete(pid);
+      });
+
+      try {
+        localStorage.setItem('deli_servis_ready_pids', JSON.stringify([...localReadySet]));
+      } catch (e) {}
+
+      // 2. Tüm ürünlerin hazır durumunu kalıcı yerel set ile senkronize et (ASLA geriye dönmez!)
+      serverOrders.forEach(so => {
+        so.secondsElapsed = getOrderSeconds(so);
+        (so.products || []).forEach(p => {
+          const pid = String(p.id);
+          if (localReadySet.has(pid)) {
+            p.isReady = true;
+          } else if (p.isReady && !recentlyUnready.has(pid)) {
+            localReadySet.add(pid);
+          }
+        });
+      });
+
+      const statusEl = document.getElementById('sync-status');
+      if (statusEl) {
+        const visibleCount = serverOrders.filter(o => !dismissedOrders.has(o.id)).length;
+        const syncTime = data.lastSyncTime || 'Canlı';
+        statusEl.textContent = `Adisyo Canlı (${visibleCount} Masa • ${syncTime})`;
+      }
+
+      const newSig = computeOrdersSignature(serverOrders);
+      const dataChanged = (newSig !== lastRenderSignature);
+
+      orders = serverOrders;
+      previousOrderIds = currentIds;
+      isFirstLoad = false;
+
+      if (dataChanged) {
+        lastRenderSignature = newSig;
+        renderOrders();
+      }
+    }
+
     async function syncOrders() {
       try {
         const res = await fetch('/api/orders?_t=' + Date.now(), {
@@ -493,94 +624,22 @@
             'x-ready-ids': [...localReadySet].join(',')
           }
         });
-        if (!res.ok) throw new Error('API Hatası');
+        if (!res.ok) {
+          // 429 veya hata durumunda mevcut siparişleri koru
+          const statusEl = document.getElementById('sync-status');
+          if (statusEl) {
+            const visibleCount = orders.filter(o => !dismissedOrders.has(o.id)).length;
+            statusEl.textContent = orders.length > 0 ? `Adisyo Beklemede (${visibleCount} Masa Korunuyor)` : 'Bağlantı Bekleniyor...';
+          }
+          return;
+        }
         const data = await res.json();
-        const rawServerOrders = data.orders || [];
-
-        // 3 saatten (180 dakika) eski veya dünden kalmış siparişleri kesinlikle kabul etme
-        const serverOrders = rawServerOrders.filter(o => getOrderSeconds(o) < 10800);
-
-        try {
-          localStorage.setItem('deli_servis_orders', JSON.stringify(serverOrders));
-        } catch (e) {}
-
-        const currentIds = new Set(serverOrders.map(o => o.id));
-
-        dismissedOrders.forEach(dismissedId => {
-          if (!currentIds.has(dismissedId)) {
-            dismissedOrders.delete(dismissedId);
-          }
-        });
-        renderedCardIds.forEach(renderedId => {
-          if (!currentIds.has(renderedId)) {
-            renderedCardIds.delete(renderedId);
-          }
-        });
-
-        // 1. Sunucudan ve diğer cihazlardan gelen hazır ürün listesini birleştir
-        const serverReadyList = Array.isArray(data.readyProductIds) ? data.readyProductIds : [];
-        const now = Date.now();
-
-        // Son 30 sn'de elle unready yapılanların süresi dolduysa temizle
-        recentlyUnready.forEach((ts, id) => {
-          if (now - ts > 30000) recentlyUnready.delete(id);
-        });
-
-        serverReadyList.forEach(id => {
-          const sid = String(id);
-          if (!recentlyUnready.has(sid)) {
-            localReadySet.add(sid);
-          }
-        });
-
-        // Kapanmış siparişlerin artık ekranda olmayan ürünlerini localReadySet'ten süpür
-        const activePids = new Set();
-        serverOrders.forEach(so => {
-          (so.products || []).forEach(p => activePids.add(String(p.id)));
-        });
-        localReadySet.forEach(pid => {
-          if (!activePids.has(pid)) localReadySet.delete(pid);
-        });
-
-        try {
-          localStorage.setItem('deli_servis_ready_pids', JSON.stringify([...localReadySet]));
-        } catch (e) {}
-
-        // 2. Tüm ürünlerin hazır durumunu kalıcı yerel set ile senkronize et (ASLA geriye dönmez!)
-        serverOrders.forEach(so => {
-          so.secondsElapsed = getOrderSeconds(so);
-          (so.products || []).forEach(p => {
-            const pid = String(p.id);
-            if (localReadySet.has(pid)) {
-              p.isReady = true;
-            } else if (p.isReady && !recentlyUnready.has(pid)) {
-              localReadySet.add(pid);
-            }
-          });
-        });
-
-        const statusEl = document.getElementById('sync-status');
-        if (statusEl) {
-          const visibleCount = serverOrders.filter(o => !dismissedOrders.has(o.id)).length;
-          const syncTime = data.lastSyncTime || 'Canlı';
-          statusEl.textContent = `Adisyo Canlı (${visibleCount} Masa • ${syncTime})`;
-        }
-
-        const newSig = computeOrdersSignature(serverOrders);
-        const dataChanged = (newSig !== lastRenderSignature);
-
-        orders = serverOrders;
-        previousOrderIds = currentIds;
-        isFirstLoad = false;
-
-        if (dataChanged) {
-          lastRenderSignature = newSig;
-          renderOrders();
-        }
+        processOrdersData(data);
       } catch (e) {
         const statusEl = document.getElementById('sync-status');
         if (statusEl) {
-          statusEl.textContent = orders.length > 0 ? 'Adisyo Beklemede (Siparişler Korunuyor)' : 'Bağlantı Bekleniyor...';
+          const visibleCount = orders.filter(o => !dismissedOrders.has(o.id)).length;
+          statusEl.textContent = orders.length > 0 ? `Adisyo Beklemede (${visibleCount} Masa Korunuyor)` : 'Bağlantı Bekleniyor...';
         }
       }
     }
@@ -610,7 +669,15 @@
       const statusEl = document.getElementById('sync-status');
       if (statusEl) statusEl.textContent = 'Adisyo Taranıyor...';
       try {
-        await fetch('/api/orders?action=sync-now', { method: 'POST' });
+        const res = await fetch('/api/orders?action=sync-now', { 
+          method: 'POST',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          processOrdersData(data);
+          return;
+        }
       } catch (e) {}
       await syncOrders();
     }

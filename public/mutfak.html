@@ -487,74 +487,134 @@
       }
     } catch (e) {}
 
+    let consecutiveZeroCount = 0;
+
+    function processOrdersData(data) {
+      if (!data) return;
+
+      const rawServerOrders = Array.isArray(data.orders) ? data.orders : [];
+      // 3 saatten (180 dakika) eski veya dünden kalmış siparişleri kesinlikle kabul etme
+      const serverOrders = rawServerOrders.filter(o => getOrderSeconds(o) < 10800);
+
+      // ==========================================
+      // KORUMA 1: KOTA KORUMASI VE SENKRONİZASYON HATASI KORUMASI
+      // Eğer Adisyo kota sınırındaysa (601) veya henüz senkronize olunamadıysa,
+      // ve ekranda aktif siparişlerimiz varsa ASLA SİLME!
+      // ==========================================
+      const isQuota = data.isQuotaProtected || (data.status && data.status.includes('kota'));
+      if (serverOrders.length === 0 && orders.length > 0) {
+        if (isQuota || data.lastSyncSuccess === false) {
+          const statusEl = document.getElementById('sync-status');
+          if (statusEl) {
+            const kitchenCount = orders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0).length;
+            statusEl.textContent = `Adisyo Kota Beklemede (${kitchenCount} Masa Korunuyor)`;
+          }
+          return;
+        }
+
+        // ==========================================
+        // KORUMA 2: ANİ SIFIRLANMA TEYİDİ (ÇİFT ONAY KİLİDİ)
+        // Canlı restoranda tüm masalar aynı anda kapanmaz.
+        // Tek bir geçici poll'de 0 gelirse en az 2 ardışık onay bekle.
+        // ==========================================
+        consecutiveZeroCount++;
+        if (consecutiveZeroCount < 2) {
+          const statusEl = document.getElementById('sync-status');
+          if (statusEl) {
+            const kitchenCount = orders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0).length;
+            statusEl.textContent = `Adisyo Doğrulanıyor (${kitchenCount} Masa • ${data.lastSyncTime || 'Canlı'})`;
+          }
+          return;
+        }
+      } else {
+        consecutiveZeroCount = 0;
+      }
+
+      // ==========================================
+      // KORUMA 3: LOCALSTORAGE KORUMASI
+      // Sadece teyitli siparişler varken veya kesin onaylanmış temiz kapanışta güncelle
+      // ==========================================
+      if (serverOrders.length > 0) {
+        try {
+          localStorage.setItem('deli_mutfak_orders', JSON.stringify(serverOrders));
+        } catch (e) {}
+      } else if (consecutiveZeroCount >= 2 && data.lastSyncSuccess) {
+        try {
+          localStorage.setItem('deli_mutfak_orders', JSON.stringify([]));
+        } catch (e) {}
+      }
+
+      const currentIds = new Set(serverOrders.map(o => o.id));
+
+      let hasNewOrder = false;
+      serverOrders.forEach(so => {
+        if (!previousOrderIds.has(so.id) && !isFirstLoad) {
+          hasNewOrder = true;
+        }
+      });
+
+      if (hasNewOrder) {
+        playDinnerBell();
+      }
+
+      renderedCardIds.forEach(id => {
+        if (!currentIds.has(id)) {
+          renderedCardIds.delete(id);
+        }
+      });
+
+      // Adisyo'da tamamen kapanmış masaları mutfak dismiss hafızasından da temizle
+      kitchenDismissedOrders.forEach(id => {
+        if (!currentIds.has(id)) {
+          kitchenDismissedOrders.delete(id);
+        }
+      });
+      try {
+        localStorage.setItem('deli_mutfak_dismissed', JSON.stringify([...kitchenDismissedOrders]));
+      } catch (e) {}
+
+      const statusEl = document.getElementById('sync-status');
+      if (statusEl) {
+        const kitchenCount = serverOrders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0).length;
+        const syncTime = data.lastSyncTime || 'Canlı';
+        statusEl.textContent = `Adisyo Canlı (${kitchenCount} Masa • ${syncTime})`;
+      }
+
+      const newSig = computeOrdersSignature(serverOrders);
+      const dataChanged = (newSig !== lastRenderSignature);
+
+      orders = serverOrders;
+      previousOrderIds = currentIds;
+      isFirstLoad = false;
+
+      if (dataChanged) {
+        lastRenderSignature = newSig;
+        renderOrders();
+      }
+    }
+
     async function syncOrders() {
       try {
         const res = await fetch('/api/orders?_t=' + Date.now(), {
           cache: 'no-store',
           headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
         });
-        if (!res.ok) throw new Error('API Hatası');
+        if (!res.ok) {
+          // 429 veya sunucu hatası durumunda mevcut siparişleri koru
+          const statusEl = document.getElementById('sync-status');
+          if (statusEl) {
+            const count = orders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0).length;
+            statusEl.textContent = orders.length > 0 ? `Adisyo Beklemede (${count} Masa Korunuyor)` : 'Bağlantı Bekleniyor...';
+          }
+          return;
+        }
         const data = await res.json();
-        const rawServerOrders = data.orders || [];
-
-        // 3 saatten (180 dakika) eski veya dünden kalmış siparişleri kesinlikle kabul etme
-        const serverOrders = rawServerOrders.filter(o => getOrderSeconds(o) < 10800);
-
-        try {
-          localStorage.setItem('deli_mutfak_orders', JSON.stringify(serverOrders));
-        } catch (e) {}
-
-        const currentIds = new Set(serverOrders.map(o => o.id));
-
-        let hasNewOrder = false;
-        serverOrders.forEach(so => {
-          if (!previousOrderIds.has(so.id) && !isFirstLoad) {
-            hasNewOrder = true;
-          }
-        });
-
-        if (hasNewOrder) {
-          playDinnerBell();
-        }
-
-        renderedCardIds.forEach(id => {
-          if (!currentIds.has(id)) {
-            renderedCardIds.delete(id);
-          }
-        });
-
-        // Adisyo'da tamamen kapanmış masaları mutfak dismiss hafızasından da temizle
-        kitchenDismissedOrders.forEach(id => {
-          if (!currentIds.has(id)) {
-            kitchenDismissedOrders.delete(id);
-          }
-        });
-        try {
-          localStorage.setItem('deli_mutfak_dismissed', JSON.stringify([...kitchenDismissedOrders]));
-        } catch (e) {}
-
-        const statusEl = document.getElementById('sync-status');
-        if (statusEl) {
-          const kitchenCount = serverOrders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0).length;
-          const syncTime = data.lastSyncTime || 'Canlı';
-          statusEl.textContent = `Adisyo Canlı (${kitchenCount} Masa • ${syncTime})`;
-        }
-
-        const newSig = computeOrdersSignature(serverOrders);
-        const dataChanged = (newSig !== lastRenderSignature);
-
-        orders = serverOrders;
-        previousOrderIds = currentIds;
-        isFirstLoad = false;
-
-        if (dataChanged) {
-          lastRenderSignature = newSig;
-          renderOrders();
-        }
+        processOrdersData(data);
       } catch (e) {
         const statusEl = document.getElementById('sync-status');
         if (statusEl) {
-          statusEl.textContent = orders.length > 0 ? 'Adisyo Beklemede (Siparişler Korunuyor)' : 'Bağlantı Bekleniyor...';
+          const count = orders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0).length;
+          statusEl.textContent = orders.length > 0 ? `Adisyo Beklemede (${count} Masa Korunuyor)` : 'Bağlantı Bekleniyor...';
         }
       }
     }
@@ -597,7 +657,15 @@
       const statusEl = document.getElementById('sync-status');
       if (statusEl) statusEl.textContent = 'Adisyo Taranıyor...';
       try {
-        await fetch('/api/orders?action=sync-now', { method: 'POST' });
+        const res = await fetch('/api/orders?action=sync-now', { 
+          method: 'POST',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          processOrdersData(data);
+          return;
+        }
       } catch (e) {}
       await syncOrders();
     }
