@@ -606,6 +606,10 @@
     function processOrdersData(data) {
       if (!data) return;
 
+      if (Array.isArray(data.preparedOrderIds)) {
+        data.preparedOrderIds.forEach(id => dismissedOrders.add(Number(id)));
+      }
+
       if (Array.isArray(data.dismissedBreadIds)) {
         let breadDismissedChanged = false;
         data.dismissedBreadIds.forEach(id => {
@@ -627,57 +631,25 @@
       const serverOrders = rawServerOrders.filter(o => {
         if (getOrderSeconds(o) >= 10800) return false;
         if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
+        if (dismissedOrders.has(Number(o.id)) || dismissedOrders.has(String(o.id))) return false;
         return true;
       });
 
       // ==========================================
-      // KORUMA 1: KOTA KORUMASI VE SENKRONİZASYON HATASI KORUMASI
-      // Eğer Adisyo kota sınırındaysa (601) veya henüz senkronize olunamadıysa,
-      // ve ekranda aktif siparişlerimiz varsa ASLA SİLME!
+      // KORUMA: Sadece sunucu Adisyo'ya hiç bağlanamadıysa ve hata varsa koru!
       // ==========================================
       const isQuota = data.isQuotaProtected || (data.status && data.status.includes('kota'));
       if (serverOrders.length === 0 && orders.length > 0) {
-        if (isQuota || data.lastSyncSuccess === false) {
+        if ((isQuota || data.lastSyncSuccess === false) && !data.lastSyncSuccess) {
           const statusEl = document.getElementById('sync-status');
           if (statusEl) {
             const visibleCount = orders.filter(o => !dismissedOrders.has(o.id)).length;
-            statusEl.textContent = `Adisyo Kota Beklemede (${visibleCount} Masa Korunuyor)`;
+            if (visibleCount > 0) {
+              statusEl.textContent = `Adisyo Kota Beklemede (${visibleCount} Masa Korunuyor)`;
+              return;
+            }
           }
-          return;
         }
-
-        // ==========================================
-        // KORUMA 2: ANİ SIFIRLANMA TEYİDİ VE OTOMATİK KURTARMA
-        // Canlı restoranda masalar varken ekran 2 sorguda silinmez!
-        // 2. boş sorguda arka planda otomatik sync-now çağırarak kendini kurtarır.
-        // En az 10 ardışık onay (30+ saniye) boyunca teyit edilmedikçe ekran temizlenmez.
-        // ==========================================
-        consecutiveZeroCount++;
-        if (consecutiveZeroCount < 10) {
-          if (consecutiveZeroCount === 2) {
-            // Arka planda sessizce taze veri çekmeyi zorla (otomatik kurtarma)
-            fetch('/api/orders?action=sync-now', { 
-              method: 'POST', 
-              headers: { 'Cache-Control': 'no-cache' } 
-            })
-            .then(r => r.json())
-            .then(d => {
-              if (d && Array.isArray(d.orders) && d.orders.length > 0) {
-                processOrdersData(d);
-              }
-            })
-            .catch(() => {});
-          }
-
-          const statusEl = document.getElementById('sync-status');
-          if (statusEl) {
-            const visibleCount = orders.filter(o => !dismissedOrders.has(o.id)).length;
-            statusEl.textContent = `Adisyo Doğrulanıyor (${visibleCount} Masa Korunuyor)`;
-          }
-          return;
-        }
-      } else {
-        consecutiveZeroCount = 0;
       }
 
       // ==========================================
@@ -757,11 +729,9 @@
         statusEl.textContent = `Adisyo Canlı (${visibleCount} Masa • ${syncTime})`;
       }
 
-      // KORUMA 4: KISMİ VERİ KORUMASI (Sunucu Adisyo ile henüz senkronize olmamışsa mevcut masaları asla silme!)
+      // KORUMA 4: KISMİ VERİ KORUMASI (SADECE sunucu Adisyo ile henüz HİÇ senkronize olmamışsa)
       let finalOrders = [...serverOrders];
-      if (data.hasSyncedWithAdisyo === false || data.rawCount === 0) {
-        // Sunucu henüz Adisyo'dan taze veri çekmediyse (örn. sadece ekmek talebi dönmüşse),
-        // istemcideki mevcut açık Adisyo masalarını koru ve listeye dahil et!
+      if (data.hasSyncedWithAdisyo === false && data.lastSyncSuccess === false) {
         const existingAdisyoOrders = orders.filter(o => !o.isBreadRequest && !dismissedOrders.has(o.id));
         if (existingAdisyoOrders.length > 0) {
           const serverIds = new Set(serverOrders.map(o => o.id));
@@ -773,7 +743,11 @@
         }
       }
 
-      finalOrders = finalOrders.filter(o => !(o.isBreadRequest && dismissedBreadSet.has(String(o.id))));
+      finalOrders = finalOrders.filter(o => {
+        if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
+        if (dismissedOrders.has(Number(o.id)) || dismissedOrders.has(String(o.id))) return false;
+        return true;
+      });
 
       finalOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
 

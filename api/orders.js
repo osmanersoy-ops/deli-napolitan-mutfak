@@ -21,12 +21,34 @@ let readyProductIds = new Set();
 const unreadyMap = new Map(); // pid -> timestamp
 let internalBreadRequests = [];
 const dismissedBreadIds = new Set();
+const preparedOrderIds = new Set();
 
 const CACHE_FILE = '/tmp/kds_cached_orders.json';
 const READY_FILE = '/tmp/kds_ready.json';
 const LAST_CALL_FILE = '/tmp/kds_last_call.json';
 const BREAD_FILE = '/tmp/kds_bread_requests.json';
 const DISMISSED_BREAD_FILE = '/tmp/kds_dismissed_bread.json';
+const PREPARED_FILE = '/tmp/kds_prepared_orders.json';
+
+function loadPreparedOrders() {
+  try {
+    if (fs.existsSync(PREPARED_FILE)) {
+      const arr = JSON.parse(fs.readFileSync(PREPARED_FILE, 'utf8'));
+      if (Array.isArray(arr)) {
+        arr.forEach(id => {
+          const num = Number(id);
+          if (!isNaN(num)) preparedOrderIds.add(num);
+        });
+      }
+    }
+  } catch (e) {}
+}
+
+function savePreparedOrders() {
+  try {
+    fs.writeFileSync(PREPARED_FILE, JSON.stringify(Array.from(preparedOrderIds)), 'utf8');
+  } catch (e) {}
+}
 
 function getLastAdisyoCallTime() {
   try {
@@ -129,6 +151,7 @@ function loadDiskCache() {
   } catch (e) {}
 
   loadBreadRequests();
+  loadPreparedOrders();
 }
 
 // Yerel /tmp disk önbelleğine kaydet (boş diziyle üzerine yazmayı allowEmpty=true olmadıkça engelle)
@@ -143,6 +166,7 @@ function saveDiskCache(allowEmpty = false) {
   } catch (e) {}
   saveBreadRequests();
   saveDismissedBread();
+  savePreparedOrders();
 }
 
 loadDiskCache();
@@ -437,6 +461,7 @@ function getOrdersPayload() {
     count: allOrders.length,
     rawCount: cachedOrders.length,
     breadCount: activeBreads.length,
+    preparedOrderIds: Array.from(preparedOrderIds),
     dismissedBreadIds: Array.from(dismissedBreadIds),
     readyProductIds: Array.from(readyProductIds),
     lastSyncTime: lastSyncTimeString || 'Canlı',
@@ -738,6 +763,10 @@ module.exports = async function handler(req, res) {
     }
     const oid = Number(body.orderId);
     if (oid) {
+      loadPreparedOrders();
+      preparedOrderIds.add(oid);
+      savePreparedOrders();
+      isQuotaProtected = false;
       try {
         await fetch(`${ADISYO_BASE_URL}/Prepared`, {
           method: 'POST',
@@ -767,7 +796,7 @@ module.exports = async function handler(req, res) {
     // Bizim kuyruktan da anında kaldır
     cachedOrders = cachedOrders.filter(o => o.id !== oid);
     saveDiskCache(true);
-    return res.status(200).json({ success: true, orderId: oid });
+    return res.status(200).json({ success: true, orderId: oid, ...getOrdersPayload() });
   }
 
   // ==========================================
@@ -789,9 +818,9 @@ module.exports = async function handler(req, res) {
 
   const payload = getOrdersPayload();
 
-  // KRİTİK GÜVENLİK: Eğer Adisyo kotasındaysak ve sıfır sipariş varsa:
-  // İstemcilere 429 kota koruması ile dön ki istemciler mevcut adisyonları ASLA silmesin!
-  if (payload.count === 0 && (payload.isQuotaProtected || (payload.status && payload.status.includes('kota')))) {
+  // KRİTİK GÜVENLİK: Sadece kota sınırındayken VE henüz hiç başarılı tarama yapılmamışken 429 dön.
+  // Ancak masalar meşru şekilde kapatıldıysa veya Adisyo başarılı taranmışsa asla 429 dönme!
+  if (payload.count === 0 && (payload.isQuotaProtected || (payload.status && payload.status.includes('kota'))) && !payload.lastSyncSuccess && preparedOrderIds.size === 0) {
     return res.status(429).json({
       ...payload,
       error: 'Adisyo kota korumasında (beklemede)'

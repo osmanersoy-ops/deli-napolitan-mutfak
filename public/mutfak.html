@@ -604,6 +604,22 @@
     function processOrdersData(data) {
       if (!data) return;
 
+      if (Array.isArray(data.preparedOrderIds)) {
+        let preparedChanged = false;
+        data.preparedOrderIds.forEach(id => {
+          const numId = Number(id);
+          if (!isNaN(numId) && !kitchenDismissedOrders.has(numId)) {
+            kitchenDismissedOrders.add(numId);
+            preparedChanged = true;
+          }
+        });
+        if (preparedChanged) {
+          try {
+            localStorage.setItem('deli_mutfak_dismissed', JSON.stringify([...kitchenDismissedOrders]));
+          } catch (e) {}
+        }
+      }
+
       if (Array.isArray(data.dismissedBreadIds)) {
         let breadDismissedChanged = false;
         data.dismissedBreadIds.forEach(id => {
@@ -625,17 +641,18 @@
       const serverOrders = rawServerOrders.filter(o => {
         if (getOrderSeconds(o) >= 10800) return false;
         if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
+        if (kitchenDismissedOrders.has(Number(o.id)) || kitchenDismissedOrders.has(String(o.id))) return false;
         return true;
       });
 
       // ==========================================
-      // KORUMA 1: KOTA KORUMASI VE SENKRONİZASYON HATASI KORUMASI
-      // Eğer Adisyo kota sınırındaysa (601) veya henüz senkronize olunamadıysa,
-      // ve ekranda aktif siparişlerimiz varsa ASLA SİLME!
+      // KORUMA: Sadece sunucu Adisyo'ya hiç bağlanamadıysa ve hata varsa koru!
+      // Eğer sunucu taze veriyi başarıyla çektiyse (lastSyncSuccess === true),
+      // veya masalar hazırlandıysa, masalar derhal ekrandan düşer.
       // ==========================================
       const isQuota = data.isQuotaProtected || (data.status && data.status.includes('kota'));
       if (serverOrders.length === 0 && orders.length > 0) {
-        if (isQuota || data.lastSyncSuccess === false) {
+        if ((isQuota || data.lastSyncSuccess === false) && !data.lastSyncSuccess) {
           const statusEl = document.getElementById('sync-status');
           if (statusEl) {
             const kitchenCount = orders.filter(o => 
@@ -643,47 +660,12 @@
               !kitchenDismissedOrders.has(String(o.id)) && 
               (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0))
             ).length;
-            statusEl.textContent = `Adisyo Kota Beklemede (${kitchenCount} Masa Korunuyor)`;
+            if (kitchenCount > 0) {
+              statusEl.textContent = `Adisyo Kota Beklemede (${kitchenCount} Masa Korunuyor)`;
+              return;
+            }
           }
-          return;
         }
-
-        // ==========================================
-        // KORUMA 2: ANİ SIFIRLANMA TEYİDİ VE OTOMATİK KURTARMA
-        // Canlı restoranda masalar varken ekran 2 sorguda silinmez!
-        // 2. boş sorguda arka planda otomatik sync-now çağırarak kendini kurtarır.
-        // En az 10 ardışık onay (30+ saniye) boyunca teyit edilmedikçe ekran temizlenmez.
-        // ==========================================
-        consecutiveZeroCount++;
-        if (consecutiveZeroCount < 10) {
-          if (consecutiveZeroCount === 2) {
-            // Arka planda otomatik taze veri çek (otomatik kurtarma, yenileye basmaya gerek kalmaz)
-            fetch('/api/orders?action=sync-now', { 
-              method: 'POST', 
-              headers: { 'Cache-Control': 'no-cache' } 
-            })
-            .then(r => r.json())
-            .then(d => {
-              if (d && Array.isArray(d.orders) && d.orders.length > 0) {
-                processOrdersData(d);
-              }
-            })
-            .catch(() => {});
-          }
-
-          const statusEl = document.getElementById('sync-status');
-          if (statusEl) {
-            const kitchenCount = orders.filter(o => 
-              !kitchenDismissedOrders.has(Number(o.id)) && 
-              !kitchenDismissedOrders.has(String(o.id)) && 
-              (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0))
-            ).length;
-            statusEl.textContent = `Adisyo Doğrulanıyor (${kitchenCount} Masa Korunuyor)`;
-          }
-          return;
-        }
-      } else {
-        consecutiveZeroCount = 0;
       }
 
       // ==========================================
@@ -746,9 +728,9 @@
         statusEl.textContent = `Adisyo Canlı (${kitchenCount} Masa • ${syncTime})`;
       }
 
-      // KORUMA 4: KISMİ VERİ KORUMASI (Sunucu Adisyo ile henüz senkronize olmamışsa mevcut masaları asla silme!)
+      // KORUMA 4: KISMİ VERİ KORUMASI (SADECE sunucu Adisyo ile henüz HİÇ senkronize olmamışsa)
       let finalOrders = [...serverOrders];
-      if (data.hasSyncedWithAdisyo === false || data.rawCount === 0) {
+      if (data.hasSyncedWithAdisyo === false && data.lastSyncSuccess === false) {
         const existingAdisyoOrders = orders.filter(o => 
           !o.isBreadRequest && 
           !kitchenDismissedOrders.has(Number(o.id)) && 
@@ -764,7 +746,11 @@
         }
       }
 
-      finalOrders = finalOrders.filter(o => !(o.isBreadRequest && dismissedBreadSet.has(String(o.id))));
+      finalOrders = finalOrders.filter(o => {
+        if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
+        if (kitchenDismissedOrders.has(Number(o.id)) || kitchenDismissedOrders.has(String(o.id))) return false;
+        return true;
+      });
 
       finalOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
 
