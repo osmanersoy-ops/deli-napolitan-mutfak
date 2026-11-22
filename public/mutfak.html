@@ -144,6 +144,10 @@
 
     // SADECE MUTFAK EKRANINDAN ADİSYONU KAPAT (Servis ekranına etki etmez!)
     function dismissKitchenOrder(orderId) {
+      if (String(orderId).startsWith('bread_')) {
+        return dismissBreadKitchenOrder(orderId);
+      }
+
       const numId = Number(orderId);
       const card = document.getElementById(`order-card-${orderId}`);
       if (card) {
@@ -163,6 +167,37 @@
         lastRenderSignature = computeOrdersSignature(orders);
         renderOrders();
       }, 300);
+    }
+
+    // EKMEK TALEBİNİ MUTFAKTAN DÜŞÜR (Fırıncı ekmeği verdikten sonra basar)
+    async function dismissBreadKitchenOrder(orderId) {
+      const card = document.getElementById(`order-card-${orderId}`);
+      if (card) {
+        card.classList.add('order-exit');
+      }
+
+      kitchenDismissedOrders.add(String(orderId));
+      try {
+        localStorage.setItem('deli_mutfak_dismissed', JSON.stringify([...kitchenDismissedOrders]));
+      } catch (e) {}
+
+      setTimeout(() => {
+        orders = orders.filter(o => String(o.id) !== String(orderId));
+        try {
+          localStorage.setItem('deli_mutfak_orders', JSON.stringify(orders));
+        } catch (e) {}
+        lastRenderSignature = computeOrdersSignature(orders);
+        renderOrders();
+      }, 300);
+
+      try {
+        await fetch('/api/orders?action=dismiss-bread-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId })
+        });
+      } catch (e) {}
+      setTimeout(syncOrders, 400);
     }
 
     // Küçük Pirinç Asılı Yemek / Servis Çanı Sesi (3 Vuruş "Çın Çın Çııın")
@@ -296,8 +331,9 @@
     // İmzaya hazır olan pizzaları ve kapatılmış adisyonları da ekle
     function computeOrdersSignature(ordersList) {
       return ordersList
-        .filter(o => !kitchenDismissedOrders.has(Number(o.id)))
+        .filter(o => !kitchenDismissedOrders.has(Number(o.id)) && !kitchenDismissedOrders.has(String(o.id)))
         .map(o => {
+          if (o.isBreadRequest) return `bread_${o.id}_${o.tableName}`;
           const readySig = (o.pizzas || []).map(p => `${p.id}:${p.isReady ? 1 : 0}:${p.note || ''}`).join(',');
           return `${o.id}_${readySig}_${o.orderNote || ''}`;
         }).join('|');
@@ -311,16 +347,27 @@
       const emptyState = document.getElementById('empty-state');
       const totalPizzasEl = document.getElementById('total-pizzas-count');
 
-      // SADECE İÇİNDE PİZZA OLAN VE MUTFAKTA KAPATILMAMIŞ ADİSYONLARI MUTFAK EKRANINA BAS
-      const kitchenOrders = orders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0);
+      // SADECE İÇİNDE PİZZA OLAN VEYA EKMEK TALEBİ OLAN VE MUTFAKTA KAPATILMAMIŞ ADİSYONLARI MUTFAK EKRANINA BAS
+      const kitchenOrders = orders.filter(o => 
+        !kitchenDismissedOrders.has(Number(o.id)) && 
+        !kitchenDismissedOrders.has(String(o.id)) && 
+        (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0))
+      );
 
-      // KURAL: En eski sipariş sol üst başta (ilk sırada), son gelen sağa geçsin (FIFO)
-      kitchenOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
+      // KURAL: Ekmek talepleri HER ZAMAN EN BAŞTA (sol üst başta, ilk sırada) yer alır!
+      // Normal siparişler sol üstten sağa ve aşağıya FIFO olarak akar.
+      kitchenOrders.sort((a, b) => {
+        if (a.isBreadRequest && !b.isBreadRequest) return -1;
+        if (!a.isBreadRequest && b.isBreadRequest) return 1;
+        return new Date(a.insertDate) - new Date(b.insertDate);
+      });
 
       let grandTotalPizzas = 0;
       kitchenOrders.forEach(o => {
-        const pending = (o.pizzas || []).filter(p => !p.isReady).length;
-        grandTotalPizzas += pending;
+        if (!o.isBreadRequest) {
+          const pending = (o.pizzas || []).filter(p => !p.isReady).length;
+          grandTotalPizzas += pending;
+        }
       });
       if (totalPizzasEl) totalPizzasEl.textContent = grandTotalPizzas;
 
@@ -338,6 +385,60 @@
         const isUrgent = elapsed >= 540;
         const isNew = !renderedCardIds.has(order.id);
         renderedCardIds.add(order.id);
+
+        // ÖZEL EKMEK TALEBİ KARTI (Sadece Mutfak & Servis Arası)
+        if (order.isBreadRequest) {
+          return `
+            <div 
+              id="order-card-${order.id}" 
+              class="bg-amber-50/70 rounded-xl border-2 border-amber-500 shadow-md flex flex-col justify-between overflow-hidden h-full ring-2 ring-amber-300 ${isNew ? 'order-new-enter' : ''}"
+            >
+              <!-- BAŞLIK: EKMEK TALEBİ + MASA ADI + SADECE MUTFAKTAN DÜŞÜREN ✕ -->
+              <div class="px-2.5 py-1.5 bg-amber-100 border-b border-amber-300 flex-shrink-0">
+                <div class="flex items-center justify-between gap-1.5">
+                  <div class="flex items-center gap-1.5 flex-wrap min-w-0">
+                    <span class="text-xl">🍞</span>
+                    <span class="text-base md:text-lg font-black text-amber-950 truncate tracking-tight">
+                      ${order.tableName}
+                    </span>
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-200 text-amber-900 border border-amber-400">
+                      EKMEK TALEBİ
+                    </span>
+                    <!-- KIRMIZI ✕: Fırıncı ekmeği verince basar, sadece mutfaktan düşürür -->
+                    <button 
+                      onclick="dismissBreadKitchenOrder('${order.id}')" 
+                      title="Ekmeği fırından çıkarıp verdikten sonra bu talebi kapat"
+                      class="w-6 h-6 md:w-7 md:h-7 rounded-full bg-red-600 hover:bg-red-700 active:scale-90 text-white flex items-center justify-center font-black text-xs md:text-sm shadow-xs transition-all border border-red-700 flex-shrink-0 cursor-pointer ml-0.5"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div class="flex-shrink-0">
+                    <span id="timer-${order.id}" class="px-2.5 py-0.5 rounded-md text-xs md:text-sm font-mono font-black tracking-wide shadow-xs inline-block text-center min-w-[62px] border ${timerClass}">
+                      ⏱ ${formatTime(elapsed)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- İÇERİK: 1 x Ekmek (1 METREDEN BELİRGİN YAZI) -->
+              <div class="p-3 bg-white flex-1 flex flex-col justify-center items-center text-center">
+                <div class="text-3xl mb-1">🥖</div>
+                <div class="text-lg md:text-xl font-black text-amber-950 tracking-wide bg-amber-100/60 border border-amber-300 px-4 py-2 rounded-xl w-full">
+                  1 x Ekmek
+                </div>
+                <div class="text-[11px] font-bold text-amber-800 mt-1">
+                  ⚡ Servis masasından istendi, fırından taze veriniz
+                </div>
+              </div>
+
+              <!-- ALT BİLGİ -->
+              <div class="px-2.5 py-1 bg-amber-100/80 border-t border-amber-200 text-center flex-shrink-0">
+                <span class="text-xs font-black text-amber-900">🔔 Fırın Ekmek Talebi</span>
+              </div>
+            </div>
+          `;
+        }
 
         let orderTypeBadge = '';
         if (order.orderType === 'PAKET') {
@@ -506,23 +607,47 @@
         if (isQuota || data.lastSyncSuccess === false) {
           const statusEl = document.getElementById('sync-status');
           if (statusEl) {
-            const kitchenCount = orders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0).length;
+            const kitchenCount = orders.filter(o => 
+              !kitchenDismissedOrders.has(Number(o.id)) && 
+              !kitchenDismissedOrders.has(String(o.id)) && 
+              (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0))
+            ).length;
             statusEl.textContent = `Adisyo Kota Beklemede (${kitchenCount} Masa Korunuyor)`;
           }
           return;
         }
 
         // ==========================================
-        // KORUMA 2: ANİ SIFIRLANMA TEYİDİ (ÇİFT ONAY KİLİDİ)
-        // Canlı restoranda tüm masalar aynı anda kapanmaz.
-        // Tek bir geçici poll'de 0 gelirse en az 2 ardışık onay bekle.
+        // KORUMA 2: ANİ SIFIRLANMA TEYİDİ VE OTOMATİK KURTARMA
+        // Canlı restoranda masalar varken ekran 2 sorguda silinmez!
+        // 2. boş sorguda arka planda otomatik sync-now çağırarak kendini kurtarır.
+        // En az 10 ardışık onay (30+ saniye) boyunca teyit edilmedikçe ekran temizlenmez.
         // ==========================================
         consecutiveZeroCount++;
-        if (consecutiveZeroCount < 2) {
+        if (consecutiveZeroCount < 10) {
+          if (consecutiveZeroCount === 2) {
+            // Arka planda otomatik taze veri çek (otomatik kurtarma, yenileye basmaya gerek kalmaz)
+            fetch('/api/orders?action=sync-now', { 
+              method: 'POST', 
+              headers: { 'Cache-Control': 'no-cache' } 
+            })
+            .then(r => r.json())
+            .then(d => {
+              if (d && Array.isArray(d.orders) && d.orders.length > 0) {
+                processOrdersData(d);
+              }
+            })
+            .catch(() => {});
+          }
+
           const statusEl = document.getElementById('sync-status');
           if (statusEl) {
-            const kitchenCount = orders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0).length;
-            statusEl.textContent = `Adisyo Doğrulanıyor (${kitchenCount} Masa • ${data.lastSyncTime || 'Canlı'})`;
+            const kitchenCount = orders.filter(o => 
+              !kitchenDismissedOrders.has(Number(o.id)) && 
+              !kitchenDismissedOrders.has(String(o.id)) && 
+              (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0))
+            ).length;
+            statusEl.textContent = `Adisyo Doğrulanıyor (${kitchenCount} Masa Korunuyor)`;
           }
           return;
         }
@@ -538,7 +663,7 @@
         try {
           localStorage.setItem('deli_mutfak_orders', JSON.stringify(serverOrders));
         } catch (e) {}
-      } else if (consecutiveZeroCount >= 2 && data.lastSyncSuccess) {
+      } else if (consecutiveZeroCount >= 10 && data.lastSyncSuccess) {
         try {
           localStorage.setItem('deli_mutfak_orders', JSON.stringify([]));
         } catch (e) {}
@@ -564,18 +689,24 @@
       });
 
       // Adisyo'da tamamen kapanmış masaları mutfak dismiss hafızasından da temizle
-      kitchenDismissedOrders.forEach(id => {
-        if (!currentIds.has(id)) {
-          kitchenDismissedOrders.delete(id);
-        }
-      });
-      try {
-        localStorage.setItem('deli_mutfak_dismissed', JSON.stringify([...kitchenDismissedOrders]));
-      } catch (e) {}
+      if (currentIds.size > 0) {
+        kitchenDismissedOrders.forEach(id => {
+          if (!currentIds.has(Number(id)) && !currentIds.has(String(id))) {
+            kitchenDismissedOrders.delete(id);
+          }
+        });
+        try {
+          localStorage.setItem('deli_mutfak_dismissed', JSON.stringify([...kitchenDismissedOrders]));
+        } catch (e) {}
+      }
 
       const statusEl = document.getElementById('sync-status');
       if (statusEl) {
-        const kitchenCount = serverOrders.filter(o => !kitchenDismissedOrders.has(Number(o.id)) && o.pizzas && o.pizzas.length > 0).length;
+        const kitchenCount = serverOrders.filter(o => 
+          !kitchenDismissedOrders.has(Number(o.id)) && 
+          !kitchenDismissedOrders.has(String(o.id)) && 
+          (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0))
+        ).length;
         const syncTime = data.lastSyncTime || 'Canlı';
         statusEl.textContent = `Adisyo Canlı (${kitchenCount} Masa • ${syncTime})`;
       }
@@ -595,9 +726,14 @@
 
     async function syncOrders() {
       try {
+        const activeBread = orders.filter(o => o.isBreadRequest);
+        const headers = { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' };
+        if (activeBread.length > 0) {
+          headers['x-bread-requests'] = encodeURIComponent(JSON.stringify(activeBread));
+        }
         const res = await fetch('/api/orders?_t=' + Date.now(), {
           cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+          headers
         });
         if (!res.ok) {
           // 429 veya sunucu hatası durumunda mevcut siparişleri koru

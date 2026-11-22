@@ -19,10 +19,12 @@ let lastAdisyoSyncTime = 0;
 let isQuotaProtected = false;
 let readyProductIds = new Set();
 const unreadyMap = new Map(); // pid -> timestamp
+let internalBreadRequests = [];
 
 const CACHE_FILE = '/tmp/kds_cached_orders.json';
 const READY_FILE = '/tmp/kds_ready.json';
 const LAST_CALL_FILE = '/tmp/kds_last_call.json';
+const BREAD_FILE = '/tmp/kds_bread_requests.json';
 
 function getLastAdisyoCallTime() {
   try {
@@ -38,6 +40,31 @@ function setLastAdisyoCallTime(ts) {
   lastFetchTime = ts;
   try {
     fs.writeFileSync(LAST_CALL_FILE, String(ts), 'utf8');
+  } catch (e) {}
+}
+
+function loadBreadRequests() {
+  try {
+    if (fs.existsSync(BREAD_FILE)) {
+      const data = JSON.parse(fs.readFileSync(BREAD_FILE, 'utf8'));
+      if (Array.isArray(data)) {
+        const now = Date.now();
+        // 2 saatten eski ekmek taleplerini temizle
+        internalBreadRequests = data.filter(b => {
+          if (!b || !b.insertDate) return false;
+          let dateStr = b.insertDate;
+          if (!dateStr.includes('+') && !dateStr.includes('Z')) dateStr += '+03:00';
+          const dt = new Date(dateStr);
+          return (now - dt.getTime()) < (2 * 3600 * 1000);
+        });
+      }
+    }
+  } catch (e) {}
+}
+
+function saveBreadRequests() {
+  try {
+    fs.writeFileSync(BREAD_FILE, JSON.stringify(internalBreadRequests), 'utf8');
   } catch (e) {}
 }
 
@@ -71,6 +98,8 @@ function loadDiskCache() {
       }
     }
   } catch (e) {}
+
+  loadBreadRequests();
 }
 
 // Yerel /tmp disk önbelleğine kaydet (boş diziyle üzerine yazmayı allowEmpty=true olmadıkça engelle)
@@ -83,6 +112,7 @@ function saveDiskCache(allowEmpty = false) {
   try {
     fs.writeFileSync(READY_FILE, JSON.stringify(Array.from(readyProductIds)), 'utf8');
   } catch (e) {}
+  saveBreadRequests();
 }
 
 loadDiskCache();
@@ -106,7 +136,11 @@ function isPizzaProduct(p) {
 }
 
 function formatOrder(order) {
-  if (!order || !Array.isArray(order.products)) return null;
+  if (!order) return null;
+  if (order.isBreadRequest) {
+    return order;
+  }
+  if (!Array.isArray(order.products)) return null;
 
   const statusStr = normalizeTurkish(order.status || '');
   const statusId = order.statusId || 0;
@@ -356,17 +390,27 @@ async function fetchFromAdisyo(force = false) {
 
 function getOrdersPayload() {
   loadDiskCache();
-  const formatted = cachedOrders
+  loadBreadRequests();
+
+  const formattedAdisyo = cachedOrders
     .map(formatOrder)
     .filter(Boolean);
 
-  // KURAL: En eski sipariş sol üst başta olsun (FIFO), yeni gelenler sağa ve aşağıya aksın
-  formatted.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
+  const allOrders = [...internalBreadRequests, ...formattedAdisyo];
+
+  // KURAL: Ekmek talepleri HER ZAMAN EN BAŞTA (sol üst başta, 1. sırada) yer alır!
+  // Normal siparişler ise sol üstten sağa ve aşağıya FIFO olarak dizilir.
+  allOrders.sort((a, b) => {
+    if (a.isBreadRequest && !b.isBreadRequest) return -1;
+    if (!a.isBreadRequest && b.isBreadRequest) return 1;
+    return new Date(a.insertDate) - new Date(b.insertDate);
+  });
 
   return {
-    orders: formatted,
-    count: formatted.length,
+    orders: allOrders,
+    count: allOrders.length,
     rawCount: cachedOrders.length,
+    breadCount: internalBreadRequests.length,
     readyProductIds: Array.from(readyProductIds),
     lastSyncTime: lastSyncTimeString || 'Canlı',
     status: lastSyncStatus,
@@ -379,11 +423,36 @@ function getOrdersPayload() {
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-ready-ids');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-ready-ids, x-bread-requests');
 
   // Anti-cache & edge protection (Ekranların önbelleğe takılmasını engelle)
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  loadDiskCache();
+
+  // Multi-container ekmek talebi senkronizasyonu
+  const clientBreadHeader = req.headers['x-bread-requests'];
+  if (clientBreadHeader) {
+    try {
+      const incomingBread = JSON.parse(decodeURIComponent(clientBreadHeader));
+      if (Array.isArray(incomingBread) && incomingBread.length > 0) {
+        let changed = false;
+        incomingBread.forEach(ib => {
+          if (ib && ib.id && !internalBreadRequests.some(b => String(b.id) === String(ib.id))) {
+            internalBreadRequests.push(ib);
+            changed = true;
+          }
+        });
+        if (changed) saveBreadRequests();
+      }
+    } catch (e) {}
+  }
   res.setHeader('Expires', '0');
 
   if (req.method === 'OPTIONS') {
@@ -506,10 +575,88 @@ module.exports = async function handler(req, res) {
   }
 
   // ==========================================
+  // 1.5. EKMEK TALEBİ YÖNETİMİ (Sadece Servis ve Mutfak Ekranı - Asla Adisyo'ya Gitmez!)
+  // ==========================================
+  if (action === 'create-bread-request') {
+    loadBreadRequests();
+    const rawTable = body.tableName || req.query?.tableName || 'EKMEK TALEBİ';
+    const cleanTable = String(rawTable).trim() || 'EKMEK TALEBİ';
+    const nowStr = new Date().toISOString();
+    const breadId = 'bread_' + Date.now();
+    const prodId = 'bread_prod_' + Date.now();
+
+    const breadOrder = {
+      id: breadId,
+      orderNumber: 'EKM',
+      orderType: 'EKMEK',
+      tableName: cleanTable.toUpperCase().includes('EKMEK') ? cleanTable : `${cleanTable} (Ekmek)`,
+      waiterName: 'Servis',
+      insertDate: nowStr,
+      secondsElapsed: 0,
+      orderNote: 'Servis Masadan Ekmek İstedi',
+      isBreadRequest: true,
+      products: [
+        {
+          id: prodId,
+          name: '1 x Ekmek',
+          category: 'Ekmek',
+          isPizza: true,
+          qty: 1,
+          note: null,
+          isReady: false
+        }
+      ],
+      pizzas: [
+        {
+          id: prodId,
+          name: '1 x Ekmek',
+          qty: 1,
+          note: null,
+          isReady: false
+        }
+      ],
+      pizzaCount: 1,
+      readyPizzaCount: 0,
+      allPizzasReady: false,
+      productCount: 1,
+      readyProductCount: 0,
+      allProductsReady: false
+    };
+
+    internalBreadRequests.unshift(breadOrder);
+    saveBreadRequests();
+    return res.status(200).json({ success: true, order: breadOrder, ...getOrdersPayload() });
+  }
+
+  if (action === 'dismiss-bread-request') {
+    loadBreadRequests();
+    const oid = String(body.orderId || req.query?.orderId || '');
+    if (oid) {
+      internalBreadRequests = internalBreadRequests.filter(b => String(b.id) !== oid);
+      saveBreadRequests();
+    }
+    return res.status(200).json({ success: true, ...getOrdersPayload() });
+  }
+
+  // ==========================================
   // 2. ÜRÜN HAZIR İŞARETLEME (toggle-ready)
   // ==========================================
   if (action === 'toggle-ready' || body.productId) {
     const pid = String(body.productId);
+    if (pid.startsWith('bread_')) {
+      loadBreadRequests();
+      internalBreadRequests = internalBreadRequests.filter(b => {
+        return !b.products.some(p => String(p.id) === pid);
+      });
+      saveBreadRequests();
+      return res.status(200).json({ 
+        success: true, 
+        productId: pid, 
+        isReady: true,
+        isBreadRequest: true,
+        ...getOrdersPayload() 
+      });
+    }
     if (body.isReady === true) {
       readyProductIds.add(pid);
       unreadyMap.delete(pid);
@@ -538,6 +685,13 @@ module.exports = async function handler(req, res) {
   // 3. ADİSYON TÜMÜ HAZIR (Adisyo Prepared Bildirimi)
   // ==========================================
   if (action === 'mark-all-ready' || action === 'notify-adisyo' || (body.orderId && req.method === 'POST')) {
+    const oidStr = String(body.orderId || '');
+    if (oidStr.startsWith('bread_')) {
+      loadBreadRequests();
+      internalBreadRequests = internalBreadRequests.filter(b => String(b.id) !== oidStr);
+      saveBreadRequests();
+      return res.status(200).json({ success: true, orderId: oidStr, isBreadRequest: true, ...getOrdersPayload() });
+    }
     const oid = Number(body.orderId);
     if (oid) {
       try {
