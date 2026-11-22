@@ -429,13 +429,8 @@ function getOrdersPayload() {
   const activeBreads = internalBreadRequests.filter(b => b && b.id && !dismissedBreadIds.has(String(b.id)));
   const allOrders = [...activeBreads, ...formattedAdisyo];
 
-  // KURAL: Ekmek talepleri HER ZAMAN EN BAŞTA (sol üst başta, 1. sırada) yer alır!
-  // Normal siparişler ise sol üstten sağa ve aşağıya FIFO olarak dizilir.
-  allOrders.sort((a, b) => {
-    if (a.isBreadRequest && !b.isBreadRequest) return -1;
-    if (!a.isBreadRequest && b.isBreadRequest) return 1;
-    return new Date(a.insertDate) - new Date(b.insertDate);
-  });
+  // KURAL: En eski sipariş sol başta (FIFO), yeni gelenler sağa eklenir (Ekmek talepleri de aynı sıraya girer)
+  allOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
 
   return {
     orders: allOrders,

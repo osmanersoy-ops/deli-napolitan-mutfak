@@ -370,13 +370,8 @@
         return (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0));
       });
 
-      // KURAL: Ekmek talepleri HER ZAMAN EN BAŞTA (sol üst başta, ilk sırada) yer alır!
-      // Normal siparişler sol üstten sağa ve aşağıya FIFO olarak akar.
-      kitchenOrders.sort((a, b) => {
-        if (a.isBreadRequest && !b.isBreadRequest) return -1;
-        if (!a.isBreadRequest && b.isBreadRequest) return 1;
-        return new Date(a.insertDate) - new Date(b.insertDate);
-      });
+      // KURAL: En eski sipariş sol başta (FIFO), yeni gelenler sağa eklenir (Ekmek talepleri de aynı sıraya girer)
+      kitchenOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
 
       let grandTotalPizzas = 0;
       kitchenOrders.forEach(o => {
@@ -771,11 +766,7 @@
 
       finalOrders = finalOrders.filter(o => !(o.isBreadRequest && dismissedBreadSet.has(String(o.id))));
 
-      finalOrders.sort((a, b) => {
-        if (a.isBreadRequest && !b.isBreadRequest) return -1;
-        if (!a.isBreadRequest && b.isBreadRequest) return 1;
-        return new Date(a.insertDate) - new Date(b.insertDate);
-      });
+      finalOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
 
       const newSig = computeOrdersSignature(finalOrders);
       const dataChanged = (newSig !== lastRenderSignature);

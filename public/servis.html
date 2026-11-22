@@ -359,13 +359,8 @@
         return !dismissedOrders.has(o.id);
       });
 
-      // KURAL: Ekmek talepleri HER ZAMAN EN BAŞTA (sol üst başta, ilk sırada) yer alır!
-      // Normal siparişler en eski sol üstte (FIFO) dizilir.
-      visibleOrders.sort((a, b) => {
-        if (a.isBreadRequest && !b.isBreadRequest) return -1;
-        if (!a.isBreadRequest && b.isBreadRequest) return 1;
-        return new Date(a.insertDate) - new Date(b.insertDate);
-      });
+      // KURAL: En eski sipariş sol başta (FIFO), yeni gelenler sağa eklenir (Ekmek talepleri de aynı sıraya girer)
+      visibleOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
 
       if (!visibleOrders || visibleOrders.length === 0) {
         container.innerHTML = '';
@@ -780,11 +775,7 @@
 
       finalOrders = finalOrders.filter(o => !(o.isBreadRequest && dismissedBreadSet.has(String(o.id))));
 
-      finalOrders.sort((a, b) => {
-        if (a.isBreadRequest && !b.isBreadRequest) return -1;
-        if (!a.isBreadRequest && b.isBreadRequest) return 1;
-        return new Date(a.insertDate) - new Date(b.insertDate);
-      });
+      finalOrders.sort((a, b) => new Date(a.insertDate) - new Date(b.insertDate));
 
       const newSig = computeOrdersSignature(finalOrders);
       const dataChanged = (newSig !== lastRenderSignature);
