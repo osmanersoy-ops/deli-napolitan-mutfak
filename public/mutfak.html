@@ -133,16 +133,28 @@
     let lastRenderSignature = null;
     const renderedCardIds = new Set();
     const kitchenDismissedOrders = new Set();
+    const dismissedBreadSet = new Set();
 
-    // Mutfak ekranında kapatılan adisyonları hafızadan yükle
+    // Mutfak ekranında kapatılan adisyonları hafızadan yükle (normal adisyonlar)
     try {
       const savedDismissed = localStorage.getItem('deli_mutfak_dismissed');
       if (savedDismissed) {
-        JSON.parse(savedDismissed).forEach(id => kitchenDismissedOrders.add(Number(id)));
+        JSON.parse(savedDismissed).forEach(id => {
+          const num = Number(id);
+          if (!isNaN(num)) kitchenDismissedOrders.add(num);
+        });
       }
     } catch (e) {}
 
-    // SADECE MUTFAK EKRANINDAN ADİSYONU KAPAT (Servis ekranına etki etmez!)
+    // Kapatılmış ekmek taleplerini yükle
+    try {
+      const savedDismissedBread = localStorage.getItem('deli_dismissed_bread');
+      if (savedDismissedBread) {
+        JSON.parse(savedDismissedBread).forEach(id => dismissedBreadSet.add(String(id)));
+      }
+    } catch (e) {}
+
+    // SADECE MUTFAK EKRANINDAN ADİSYONU KAPAT (Servis ekranına kesinlikle etki etmez!)
     function dismissKitchenOrder(orderId) {
       if (String(orderId).startsWith('bread_')) {
         return dismissBreadKitchenOrder(orderId);
@@ -167,37 +179,38 @@
         lastRenderSignature = computeOrdersSignature(orders);
         renderOrders();
       }, 300);
+      // DİKKAT: Normal adisyonlarda sunucuya ASLA istek gönderilmez! Servis ekranı etkilenmez.
     }
 
-    // EKMEK TALEBİNİ MUTFAKTAN DÜŞÜR (Fırıncı ekmeği verdikten sonra basar)
+    // EKMEK TALEBİNİ DÜŞÜR (Hem Mutfak hem Servis ekranından anında kaldırılır!)
     async function dismissBreadKitchenOrder(orderId) {
+      const sId = String(orderId);
       const card = document.getElementById(`order-card-${orderId}`);
       if (card) {
         card.classList.add('order-exit');
       }
 
-      kitchenDismissedOrders.add(String(orderId));
+      dismissedBreadSet.add(sId);
       try {
-        localStorage.setItem('deli_mutfak_dismissed', JSON.stringify([...kitchenDismissedOrders]));
+        localStorage.setItem('deli_dismissed_bread', JSON.stringify([...dismissedBreadSet]));
       } catch (e) {}
 
-      setTimeout(() => {
-        orders = orders.filter(o => String(o.id) !== String(orderId));
-        try {
-          localStorage.setItem('deli_mutfak_orders', JSON.stringify(orders));
-        } catch (e) {}
-        lastRenderSignature = computeOrdersSignature(orders);
-        renderOrders();
-      }, 300);
+      orders = orders.filter(o => String(o.id) !== sId);
+      try {
+        localStorage.setItem('deli_mutfak_orders', JSON.stringify(orders));
+      } catch (e) {}
+      lastRenderSignature = computeOrdersSignature(orders);
+      renderOrders();
 
+      // Sunucuya bildir ki Servis ekranı da dahil tüm ekranlardan anında düşsün!
       try {
         await fetch('/api/orders?action=dismiss-bread-request', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId })
+          body: JSON.stringify({ orderId: sId })
         });
       } catch (e) {}
-      setTimeout(syncOrders, 400);
+      setTimeout(syncOrders, 300);
     }
 
     // Küçük Pirinç Asılı Yemek / Servis Çanı Sesi (3 Vuruş "Çın Çın Çııın")
@@ -331,7 +344,10 @@
     // İmzaya hazır olan pizzaları ve kapatılmış adisyonları da ekle
     function computeOrdersSignature(ordersList) {
       return ordersList
-        .filter(o => !kitchenDismissedOrders.has(Number(o.id)) && !kitchenDismissedOrders.has(String(o.id)))
+        .filter(o => {
+          if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
+          return !kitchenDismissedOrders.has(Number(o.id)) && !kitchenDismissedOrders.has(String(o.id));
+        })
         .map(o => {
           if (o.isBreadRequest) return `bread_${o.id}_${o.tableName}`;
           const readySig = (o.pizzas || []).map(p => `${p.id}:${p.isReady ? 1 : 0}:${p.note || ''}`).join(',');
@@ -348,11 +364,11 @@
       const totalPizzasEl = document.getElementById('total-pizzas-count');
 
       // SADECE İÇİNDE PİZZA OLAN VEYA EKMEK TALEBİ OLAN VE MUTFAKTA KAPATILMAMIŞ ADİSYONLARI MUTFAK EKRANINA BAS
-      const kitchenOrders = orders.filter(o => 
-        !kitchenDismissedOrders.has(Number(o.id)) && 
-        !kitchenDismissedOrders.has(String(o.id)) && 
-        (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0))
-      );
+      const kitchenOrders = orders.filter(o => {
+        if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
+        if (kitchenDismissedOrders.has(Number(o.id)) || kitchenDismissedOrders.has(String(o.id))) return false;
+        return (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0));
+      });
 
       // KURAL: Ekmek talepleri HER ZAMAN EN BAŞTA (sol üst başta, ilk sırada) yer alır!
       // Normal siparişler sol üstten sağa ve aşağıya FIFO olarak akar.
@@ -593,9 +609,29 @@
     function processOrdersData(data) {
       if (!data) return;
 
+      if (Array.isArray(data.dismissedBreadIds)) {
+        let breadDismissedChanged = false;
+        data.dismissedBreadIds.forEach(id => {
+          const sid = String(id);
+          if (!dismissedBreadSet.has(sid)) {
+            dismissedBreadSet.add(sid);
+            breadDismissedChanged = true;
+          }
+        });
+        if (breadDismissedChanged) {
+          try {
+            localStorage.setItem('deli_dismissed_bread', JSON.stringify([...dismissedBreadSet]));
+          } catch (e) {}
+        }
+      }
+
       const rawServerOrders = Array.isArray(data.orders) ? data.orders : [];
-      // 3 saatten (180 dakika) eski veya dünden kalmış siparişleri kesinlikle kabul etme
-      const serverOrders = rawServerOrders.filter(o => getOrderSeconds(o) < 10800);
+      // 3 saatten (180 dakika) eski veya kapatılmış ekmek taleplerini filtrele
+      const serverOrders = rawServerOrders.filter(o => {
+        if (getOrderSeconds(o) >= 10800) return false;
+        if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
+        return true;
+      });
 
       // ==========================================
       // KORUMA 1: KOTA KORUMASI VE SENKRONİZASYON HATASI KORUMASI
@@ -688,9 +724,13 @@
         }
       });
 
-      // Adisyo'da tamamen kapanmış masaları mutfak dismiss hafızasından da temizle
+      // Adisyo'da tamamen kapanmış masaları mutfak dismiss hafızasından da temizle (ekmek talepleri hariç)
       if (currentIds.size > 0) {
         kitchenDismissedOrders.forEach(id => {
+          if (typeof id === 'string' && id.startsWith('bread_')) {
+            kitchenDismissedOrders.delete(id);
+            return;
+          }
           if (!currentIds.has(Number(id)) && !currentIds.has(String(id))) {
             kitchenDismissedOrders.delete(id);
           }
@@ -729,6 +769,8 @@
         }
       }
 
+      finalOrders = finalOrders.filter(o => !(o.isBreadRequest && dismissedBreadSet.has(String(o.id))));
+
       finalOrders.sort((a, b) => {
         if (a.isBreadRequest && !b.isBreadRequest) return -1;
         if (!a.isBreadRequest && b.isBreadRequest) return 1;
@@ -750,7 +792,7 @@
 
     async function syncOrders() {
       try {
-        const activeBread = orders.filter(o => o.isBreadRequest);
+        const activeBread = orders.filter(o => o.isBreadRequest && !dismissedBreadSet.has(String(o.id)));
         const headers = { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' };
         if (activeBread.length > 0) {
           headers['x-bread-requests'] = encodeURIComponent(JSON.stringify(activeBread));

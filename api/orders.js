@@ -20,11 +20,13 @@ let isQuotaProtected = false;
 let readyProductIds = new Set();
 const unreadyMap = new Map(); // pid -> timestamp
 let internalBreadRequests = [];
+const dismissedBreadIds = new Set();
 
 const CACHE_FILE = '/tmp/kds_cached_orders.json';
 const READY_FILE = '/tmp/kds_ready.json';
 const LAST_CALL_FILE = '/tmp/kds_last_call.json';
 const BREAD_FILE = '/tmp/kds_bread_requests.json';
+const DISMISSED_BREAD_FILE = '/tmp/kds_dismissed_bread.json';
 
 function getLastAdisyoCallTime() {
   try {
@@ -43,15 +45,42 @@ function setLastAdisyoCallTime(ts) {
   } catch (e) {}
 }
 
+function loadDismissedBread() {
+  try {
+    if (fs.existsSync(DISMISSED_BREAD_FILE)) {
+      const arr = JSON.parse(fs.readFileSync(DISMISSED_BREAD_FILE, 'utf8'));
+      if (Array.isArray(arr)) {
+        const now = Date.now();
+        arr.forEach(id => {
+          const sId = String(id);
+          // 24 saatten eski kapatılmış id'leri temizle
+          const ts = Number(sId.replace('bread_', ''));
+          if (!ts || isNaN(ts) || (now - ts) < (24 * 3600 * 1000)) {
+            dismissedBreadIds.add(sId);
+          }
+        });
+      }
+    }
+  } catch (e) {}
+}
+
+function saveDismissedBread() {
+  try {
+    fs.writeFileSync(DISMISSED_BREAD_FILE, JSON.stringify(Array.from(dismissedBreadIds)), 'utf8');
+  } catch (e) {}
+}
+
 function loadBreadRequests() {
+  loadDismissedBread();
   try {
     if (fs.existsSync(BREAD_FILE)) {
       const data = JSON.parse(fs.readFileSync(BREAD_FILE, 'utf8'));
       if (Array.isArray(data)) {
         const now = Date.now();
-        // 2 saatten eski ekmek taleplerini temizle
+        // 2 saatten eski veya kapatılmış ekmek taleplerini temizle
         internalBreadRequests = data.filter(b => {
-          if (!b || !b.insertDate) return false;
+          if (!b || !b.id || dismissedBreadIds.has(String(b.id))) return false;
+          if (!b.insertDate) return false;
           let dateStr = b.insertDate;
           if (!dateStr.includes('+') && !dateStr.includes('Z')) dateStr += '+03:00';
           const dt = new Date(dateStr);
@@ -113,6 +142,7 @@ function saveDiskCache(allowEmpty = false) {
     fs.writeFileSync(READY_FILE, JSON.stringify(Array.from(readyProductIds)), 'utf8');
   } catch (e) {}
   saveBreadRequests();
+  saveDismissedBread();
 }
 
 loadDiskCache();
@@ -396,7 +426,8 @@ function getOrdersPayload() {
     .map(formatOrder)
     .filter(Boolean);
 
-  const allOrders = [...internalBreadRequests, ...formattedAdisyo];
+  const activeBreads = internalBreadRequests.filter(b => b && b.id && !dismissedBreadIds.has(String(b.id)));
+  const allOrders = [...activeBreads, ...formattedAdisyo];
 
   // KURAL: Ekmek talepleri HER ZAMAN EN BAŞTA (sol üst başta, 1. sırada) yer alır!
   // Normal siparişler ise sol üstten sağa ve aşağıya FIFO olarak dizilir.
@@ -410,7 +441,8 @@ function getOrdersPayload() {
     orders: allOrders,
     count: allOrders.length,
     rawCount: cachedOrders.length,
-    breadCount: internalBreadRequests.length,
+    breadCount: activeBreads.length,
+    dismissedBreadIds: Array.from(dismissedBreadIds),
     readyProductIds: Array.from(readyProductIds),
     lastSyncTime: lastSyncTimeString || 'Canlı',
     status: lastSyncStatus,
@@ -444,7 +476,8 @@ module.exports = async function handler(req, res) {
       if (Array.isArray(incomingBread) && incomingBread.length > 0) {
         let changed = false;
         incomingBread.forEach(ib => {
-          if (ib && ib.id && !internalBreadRequests.some(b => String(b.id) === String(ib.id))) {
+          const bid = String(ib?.id || '');
+          if (bid && !dismissedBreadIds.has(bid) && !internalBreadRequests.some(b => String(b.id) === bid)) {
             internalBreadRequests.push(ib);
             changed = true;
           }
@@ -453,13 +486,6 @@ module.exports = async function handler(req, res) {
       }
     } catch (e) {}
   }
-  res.setHeader('Expires', '0');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  loadDiskCache();
 
   // İstemcilerden gelen bilinen hazır ürün ID'lerini birleştir (Multi-device / multi-container sync)
   const clientReadyHeader = req.headers['x-ready-ids'] || req.query?.ready;
@@ -629,14 +655,18 @@ module.exports = async function handler(req, res) {
 
     internalBreadRequests.unshift(breadOrder);
     saveBreadRequests();
+  saveDismissedBread();
     return res.status(200).json({ success: true, order: breadOrder, ...getOrdersPayload() });
   }
 
   if (action === 'dismiss-bread-request') {
+    loadDismissedBread();
     loadBreadRequests();
     loadDiskCache();
     const oid = String(body.orderId || req.query?.orderId || '');
     if (oid) {
+      dismissedBreadIds.add(oid);
+      saveDismissedBread();
       internalBreadRequests = internalBreadRequests.filter(b => String(b.id) !== oid);
       saveBreadRequests();
     }
@@ -649,16 +679,26 @@ module.exports = async function handler(req, res) {
   if (action === 'toggle-ready' || body.productId) {
     const pid = String(body.productId);
     if (pid.startsWith('bread_')) {
+      loadDismissedBread();
       loadBreadRequests();
+      loadDiskCache();
+      const matchingBread = internalBreadRequests.find(b => 
+        String(b.id) === String(body.orderId) || (b.products && b.products.some(p => String(p.id) === pid))
+      );
+      if (matchingBread) {
+        dismissedBreadIds.add(String(matchingBread.id));
+        saveDismissedBread();
+      }
       internalBreadRequests = internalBreadRequests.filter(b => {
+        if (matchingBread && String(b.id) === String(matchingBread.id)) return false;
         return !b.products.some(p => String(p.id) === pid);
       });
       saveBreadRequests();
       return res.status(200).json({ 
         success: true, 
         productId: pid, 
-        isReady: true,
-        isBreadRequest: true,
+        isReady: true, 
+        isBreadRequest: true, 
         ...getOrdersPayload() 
       });
     }
@@ -692,7 +732,11 @@ module.exports = async function handler(req, res) {
   if (action === 'mark-all-ready' || action === 'notify-adisyo' || (body.orderId && req.method === 'POST')) {
     const oidStr = String(body.orderId || '');
     if (oidStr.startsWith('bread_')) {
+      loadDismissedBread();
       loadBreadRequests();
+      loadDiskCache();
+      dismissedBreadIds.add(oidStr);
+      saveDismissedBread();
       internalBreadRequests = internalBreadRequests.filter(b => String(b.id) !== oidStr);
       saveBreadRequests();
       return res.status(200).json({ success: true, orderId: oidStr, isBreadRequest: true, ...getOrdersPayload() });

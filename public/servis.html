@@ -134,6 +134,15 @@
     const recentlyUnready = new Map(); // pid -> timestamp (son 30 sn'de elle un-ready yapılanlar)
     const renderedCardIds = new Set();
     const dismissedOrders = new Set();
+    const dismissedBreadSet = new Set();
+
+    // Kapatılmış ekmek taleplerini yükle
+    try {
+      const savedDismissedBread = localStorage.getItem('deli_dismissed_bread');
+      if (savedDismissedBread) {
+        JSON.parse(savedDismissedBread).forEach(id => dismissedBreadSet.add(String(id)));
+      }
+    } catch (e) {}
 
     // Hafızadan hazır olan ürünleri yükle (cihazlar arası ve yenilemelerde koruma)
     try {
@@ -269,6 +278,37 @@
     // (Adisyo'da masayı mavi yapar ve mutfaktan düşürür!)
     // ==========================================
     async function markAllOrderReady(orderId) {
+      const sOrderId = String(orderId);
+
+      // Eğer Ekmek Talebi ise iki ekrandan da anında düşür (ASLA Adisyo'ya gitmez!)
+      if (sOrderId.startsWith('bread_')) {
+        dismissedBreadSet.add(sOrderId);
+        try {
+          localStorage.setItem('deli_dismissed_bread', JSON.stringify([...dismissedBreadSet]));
+        } catch (e) {}
+
+        const card = document.getElementById(`servis-card-${orderId}`);
+        if (card) {
+          card.classList.add('order-exit');
+        }
+
+        orders = orders.filter(o => String(o.id) !== sOrderId);
+        try {
+          localStorage.setItem('deli_servis_orders', JSON.stringify(orders));
+        } catch (e) {}
+        renderOrders();
+
+        try {
+          await fetch('/api/orders?action=dismiss-bread-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId: sOrderId })
+          });
+        } catch (e) {}
+        setTimeout(syncOrders, 300);
+        return;
+      }
+
       const card = document.getElementById(`servis-card-${orderId}`);
       if (card) {
         card.classList.add('order-exit');
@@ -293,19 +333,6 @@
         renderOrders();
       }, 350);
 
-      // Eğer Ekmek Talebi ise sadece kendi sistemimizden düşür (ASLA Adisyo'ya gitmez!)
-      if (String(orderId).startsWith('bread_')) {
-        try {
-          await fetch('/api/orders?action=dismiss-bread-request', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ orderId })
-          });
-        } catch (e) {}
-        setTimeout(syncOrders, 400);
-        return;
-      }
-
       // Adisyo'ya resmi Prepared komutu gönder (Adisyo mutfağından düşer & masa mavi olur!)
       try {
         await fetch('/api/orders?action=mark-all-ready', {
@@ -327,7 +354,10 @@
       const container = document.getElementById('orders-grid');
       const emptyState = document.getElementById('empty-state');
 
-      const visibleOrders = orders.filter(o => !dismissedOrders.has(o.id));
+      const visibleOrders = orders.filter(o => {
+        if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
+        return !dismissedOrders.has(o.id);
+      });
 
       // KURAL: Ekmek talepleri HER ZAMAN EN BAŞTA (sol üst başta, ilk sırada) yer alır!
       // Normal siparişler en eski sol üstte (FIFO) dizilir.
@@ -581,9 +611,29 @@
     function processOrdersData(data) {
       if (!data) return;
 
+      if (Array.isArray(data.dismissedBreadIds)) {
+        let breadDismissedChanged = false;
+        data.dismissedBreadIds.forEach(id => {
+          const sid = String(id);
+          if (!dismissedBreadSet.has(sid)) {
+            dismissedBreadSet.add(sid);
+            breadDismissedChanged = true;
+          }
+        });
+        if (breadDismissedChanged) {
+          try {
+            localStorage.setItem('deli_dismissed_bread', JSON.stringify([...dismissedBreadSet]));
+          } catch (e) {}
+        }
+      }
+
       const rawServerOrders = Array.isArray(data.orders) ? data.orders : [];
-      // 3 saatten (180 dakika) eski veya dünden kalmış siparişleri kesinlikle kabul etme
-      const serverOrders = rawServerOrders.filter(o => getOrderSeconds(o) < 10800);
+      // 3 saatten (180 dakika) eski veya kapatılmış ekmek taleplerini filtrele
+      const serverOrders = rawServerOrders.filter(o => {
+        if (getOrderSeconds(o) >= 10800) return false;
+        if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
+        return true;
+      });
 
       // ==========================================
       // KORUMA 1: KOTA KORUMASI VE SENKRONİZASYON HATASI KORUMASI
@@ -728,6 +778,8 @@
         }
       }
 
+      finalOrders = finalOrders.filter(o => !(o.isBreadRequest && dismissedBreadSet.has(String(o.id))));
+
       finalOrders.sort((a, b) => {
         if (a.isBreadRequest && !b.isBreadRequest) return -1;
         if (!a.isBreadRequest && b.isBreadRequest) return 1;
@@ -749,7 +801,7 @@
 
     async function syncOrders() {
       try {
-        const activeBread = orders.filter(o => o.isBreadRequest);
+        const activeBread = orders.filter(o => o.isBreadRequest && !dismissedBreadSet.has(String(o.id)));
         const headers = { 
           'Cache-Control': 'no-cache', 
           'Pragma': 'no-cache',
