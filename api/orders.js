@@ -579,6 +579,10 @@ module.exports = async function handler(req, res) {
   // ==========================================
   if (action === 'create-bread-request') {
     loadBreadRequests();
+    loadDiskCache();
+    if (cachedOrders.length === 0) {
+      await fetchFromAdisyo(false);
+    }
     const rawTable = body.tableName || req.query?.tableName || 'EKMEK TALEBİ';
     const cleanTable = String(rawTable).trim() || 'EKMEK TALEBİ';
     const nowStr = new Date().toISOString();
@@ -630,6 +634,7 @@ module.exports = async function handler(req, res) {
 
   if (action === 'dismiss-bread-request') {
     loadBreadRequests();
+    loadDiskCache();
     const oid = String(body.orderId || req.query?.orderId || '');
     if (oid) {
       internalBreadRequests = internalBreadRequests.filter(b => String(b.id) !== oid);

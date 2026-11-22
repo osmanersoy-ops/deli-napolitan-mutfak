@@ -711,11 +711,35 @@
         statusEl.textContent = `Adisyo Canlı (${kitchenCount} Masa • ${syncTime})`;
       }
 
-      const newSig = computeOrdersSignature(serverOrders);
+      // KORUMA 4: KISMİ VERİ KORUMASI (Sunucu Adisyo ile henüz senkronize olmamışsa mevcut masaları asla silme!)
+      let finalOrders = [...serverOrders];
+      if (data.hasSyncedWithAdisyo === false || data.rawCount === 0) {
+        const existingAdisyoOrders = orders.filter(o => 
+          !o.isBreadRequest && 
+          !kitchenDismissedOrders.has(Number(o.id)) && 
+          !kitchenDismissedOrders.has(String(o.id))
+        );
+        if (existingAdisyoOrders.length > 0) {
+          const serverIds = new Set(serverOrders.map(o => o.id));
+          existingAdisyoOrders.forEach(eo => {
+            if (!serverIds.has(eo.id)) {
+              finalOrders.push(eo);
+            }
+          });
+        }
+      }
+
+      finalOrders.sort((a, b) => {
+        if (a.isBreadRequest && !b.isBreadRequest) return -1;
+        if (!a.isBreadRequest && b.isBreadRequest) return 1;
+        return new Date(a.insertDate) - new Date(b.insertDate);
+      });
+
+      const newSig = computeOrdersSignature(finalOrders);
       const dataChanged = (newSig !== lastRenderSignature);
 
-      orders = serverOrders;
-      previousOrderIds = currentIds;
+      orders = finalOrders;
+      previousOrderIds = new Set(finalOrders.map(o => o.id));
       isFirstLoad = false;
 
       if (dataChanged) {

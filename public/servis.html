@@ -712,11 +712,33 @@
         statusEl.textContent = `Adisyo Canlı (${visibleCount} Masa • ${syncTime})`;
       }
 
-      const newSig = computeOrdersSignature(serverOrders);
+      // KORUMA 4: KISMİ VERİ KORUMASI (Sunucu Adisyo ile henüz senkronize olmamışsa mevcut masaları asla silme!)
+      let finalOrders = [...serverOrders];
+      if (data.hasSyncedWithAdisyo === false || data.rawCount === 0) {
+        // Sunucu henüz Adisyo'dan taze veri çekmediyse (örn. sadece ekmek talebi dönmüşse),
+        // istemcideki mevcut açık Adisyo masalarını koru ve listeye dahil et!
+        const existingAdisyoOrders = orders.filter(o => !o.isBreadRequest && !dismissedOrders.has(o.id));
+        if (existingAdisyoOrders.length > 0) {
+          const serverIds = new Set(serverOrders.map(o => o.id));
+          existingAdisyoOrders.forEach(eo => {
+            if (!serverIds.has(eo.id)) {
+              finalOrders.push(eo);
+            }
+          });
+        }
+      }
+
+      finalOrders.sort((a, b) => {
+        if (a.isBreadRequest && !b.isBreadRequest) return -1;
+        if (!a.isBreadRequest && b.isBreadRequest) return 1;
+        return new Date(a.insertDate) - new Date(b.insertDate);
+      });
+
+      const newSig = computeOrdersSignature(finalOrders);
       const dataChanged = (newSig !== lastRenderSignature);
 
-      orders = serverOrders;
-      previousOrderIds = currentIds;
+      orders = finalOrders;
+      previousOrderIds = new Set(finalOrders.map(o => o.id));
       isFirstLoad = false;
 
       if (dataChanged) {
@@ -784,7 +806,18 @@
         });
         if (res.ok) {
           const data = await res.json();
-          processOrdersData(data);
+          if (data && data.order) {
+            if (!orders.some(o => o.id === data.order.id)) {
+              orders.unshift(data.order);
+              try {
+                localStorage.setItem('deli_servis_orders', JSON.stringify(orders));
+              } catch (e) {}
+              renderOrders();
+            }
+          }
+          if (data && Array.isArray(data.orders)) {
+            processOrdersData(data);
+          }
         }
       } catch (e) {
         console.error('Bread request error:', e);
