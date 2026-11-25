@@ -213,11 +213,7 @@
     // bulunduğu sütunda tek kalsın (row-span-2) ve bir altına adisyon gelmesin!
     function shouldCardSpanTwoRows(order) {
       const products = order.products || [];
-      let score = 0;
-      for (const p of products) {
-        score += (p.note ? 1.5 : 1);
-      }
-      return score >= 8; // 9 normal ürün veya notlu 8 ürün tek slota sığmaz
+      return products.length > 4; // 4 üründen sonra (5+ ürün) uzun adisyon (row-span-2)
     }
 
     function computeOrdersSignature(ordersList) {
