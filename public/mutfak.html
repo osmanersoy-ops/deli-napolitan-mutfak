@@ -331,17 +331,21 @@
       }
     }
 
-    // Mutfak İçin Çok Pizza Kuralı: 6+ pizza veya notlu pizzalar 1 slota sığmaz, 2 slot (row-span-2) kaplar!
+    // Mutfak İçin Çok Ürün Kuralı: 6+ pizza veya salatalarla birlikte 1 slota sığmazsa 2 slot (row-span-2) kaplar!
     function shouldCardSpanTwoRows(order) {
       const pizzas = order.pizzas || [];
+      const salads = order.salads || [];
       let score = 0;
       for (const p of pizzas) {
         score += (p.note ? 1.5 : 1);
       }
-      return score >= 6.5; // 7 ve üzeri pizza veya notlu 5+ pizza
+      for (const s of salads) {
+        score += (s.note ? 1.0 : 0.65);
+      }
+      return score >= 6.5; // 7 ve üzeri pizza veya salatalarla birlikte taşan adisyonlar
     }
 
-    // İmzaya hazır olan pizzaları ve kapatılmış adisyonları da ekle
+    // İmzaya hazır olan pizzaları/salataları ve kapatılmış adisyonları da ekle
     function computeOrdersSignature(ordersList) {
       return ordersList
         .filter(o => {
@@ -351,7 +355,8 @@
         .map(o => {
           if (o.isBreadRequest) return `bread_${o.id}_${o.tableName}`;
           const readySig = (o.pizzas || []).map(p => `${p.id}:${p.isReady ? 1 : 0}:${p.note || ''}`).join(',');
-          return `${o.id}_${readySig}_${o.orderNote || ''}`;
+          const saladSig = (o.salads || []).map(s => `${s.id}:${s.isReady ? 1 : 0}:${s.note || ''}`).join(',');
+          return `${o.id}_${readySig}_${saladSig}_${o.orderNote || ''}`;
         }).join('|');
     }
 
@@ -363,11 +368,11 @@
       const emptyState = document.getElementById('empty-state');
       const totalPizzasEl = document.getElementById('total-pizzas-count');
 
-      // SADECE İÇİNDE PİZZA OLAN VEYA EKMEK TALEBİ OLAN VE MUTFAKTA KAPATILMAMIŞ ADİSYONLARI MUTFAK EKRANINA BAS
+      // SADECE İÇİNDE PİZZA, SALATA VEYA EKMEK TALEBİ OLAN VE MUTFAKTA KAPATILMAMIŞ ADİSYONLARI MUTFAK EKRANINA BAS
       const kitchenOrders = orders.filter(o => {
         if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
         if (kitchenDismissedOrders.has(Number(o.id)) || kitchenDismissedOrders.has(String(o.id))) return false;
-        return (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0));
+        return (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0) || (o.salads && o.salads.length > 0));
       });
 
       // KURAL: En eski sipariş sol başta (FIFO), yeni gelenler sağa eklenir (Ekmek talepleri de aynı sıraya girer)
@@ -569,15 +574,60 @@
                   </div>
                 `;
               }).join('')}
+
+              <!-- SALATALAR: İNCE VE TURUNCU TRANSPARAN DOLGULU (Pizzacı uzaktan pizza sanmasın) -->
+              ${(order.salads || []).map((salad) => {
+                const isReady = salad.isReady;
+
+                return `
+                  <div class="py-0.5 px-2 rounded-md border transition-all flex items-start gap-2 ${
+                    isReady 
+                      ? 'bg-emerald-50/50 border-emerald-200/70 opacity-60' 
+                      : 'bg-orange-500/10 border-orange-300/60'
+                  }">
+                    ${salad.qty > 1 ? `
+                      <span class="text-xs font-bold px-1.5 py-0.2 rounded flex-shrink-0 leading-tight ${
+                        isReady 
+                          ? 'bg-emerald-100 text-emerald-700 line-through' 
+                          : 'bg-orange-500/20 text-orange-900 border border-orange-300/60'
+                      }">
+                        ${salad.qty}x
+                      </span>
+                    ` : ''}
+
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center justify-between gap-1.5">
+                        <span class="text-xs md:text-[13px] font-semibold leading-tight block truncate whitespace-nowrap ${
+                          isReady ? 'text-slate-400 line-through' : 'text-orange-950/85'
+                        }" title="${salad.name}">
+                          🥗 ${salad.name}
+                        </span>
+                        ${isReady ? `
+                          <span class="text-[9px] font-bold uppercase tracking-wider px-1 py-0.2 rounded bg-emerald-100 text-emerald-700 flex-shrink-0">
+                            ✓ Çıktı
+                          </span>
+                        ` : ''}
+                      </div>
+
+                      ${salad.note ? `
+                        <div class="mt-0.5 flex items-start gap-1 bg-orange-500/15 border border-orange-300/70 text-orange-950 px-1.5 py-0.2 rounded text-[11px] font-bold max-w-full">
+                          <span class="text-[11px] leading-none flex-shrink-0">⚠️</span>
+                          <span class="break-words leading-tight" title="${salad.note}">${salad.note}</span>
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
 
-            <!-- KART ALTI: FIRIN DURUMU VE TOPLAM PİZZA -->
+            <!-- KART ALTI: FIRIN DURUMU VE TOPLAM PİZZA / SALATA -->
             <div class="px-2.5 py-1 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-600 font-bold flex-shrink-0">
               <span>
-                ${isAllPizzasReady ? '<span class="text-emerald-700 font-black">✓ Tüm Pizzalar Servise Çıktı</span>' : '🍕 Fırın Akışı'}
+                ${isAllPizzasReady ? '<span class="text-emerald-700 font-black">✓ Tüm Pizzalar Servise Çıktı</span>' : ((order.pizzas || []).length > 0 ? '🍕 Fırın Akışı' : '🥗 Salata Siparişi')}
               </span>
               <span class="text-amber-800 font-black text-xs">
-                ${(order.pizzas || []).length} Pizza
+                ${(order.pizzas || []).length > 0 ? `${(order.pizzas || []).length} Pizza` : ''}${(order.pizzas || []).length > 0 && (order.salads || []).length > 0 ? ' • ' : ''}${(order.salads || []).length > 0 ? `<span class="text-orange-700 font-semibold">${(order.salads || []).length} Salata</span>` : ''}
               </span>
             </div>
 
@@ -663,7 +713,7 @@
             const kitchenCount = orders.filter(o => 
               !kitchenDismissedOrders.has(Number(o.id)) && 
               !kitchenDismissedOrders.has(String(o.id)) && 
-              (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0))
+              (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0) || (o.salads && o.salads.length > 0))
             ).length;
             if (kitchenCount > 0) {
               statusEl.textContent = `Adisyo Kota Beklemede (${kitchenCount} Masa Korunuyor)`;
@@ -732,7 +782,7 @@
         const kitchenCount = serverOrders.filter(o => 
           !kitchenDismissedOrders.has(Number(o.id)) && 
           !kitchenDismissedOrders.has(String(o.id)) && 
-          (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0))
+          (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0) || (o.salads && o.salads.length > 0))
         ).length;
         const syncTime = data.lastSyncTime || 'Canlı';
         statusEl.textContent = `Adisyo Canlı (${kitchenCount} Masa • ${syncTime})`;

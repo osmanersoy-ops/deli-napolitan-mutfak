@@ -5,8 +5,9 @@ const ADISYO_API_KEY = process.env.ADISYO_API_KEY || '25b80b3556ca3a15353dd2fd31
 const ADISYO_API_SECRET = process.env.ADISYO_API_SECRET || '65e70574-2b17-42a1-b093-4128ad9aff44';
 const ADISYO_API_CONSUMER = process.env.ADISYO_API_CONSUMER || 'Deli Napolitan';
 
-// Sadece pizza çeşitlerini filtrelemek için anahtar kelimeler
+// Sadece pizza ve salata çeşitlerini filtrelemek için anahtar kelimeler
 const PIZZA_KEYWORDS = ['pizza', 'pizzalar', 'napolitan', 'calzone', 'pizzetta'];
+const SALAD_KEYWORDS = ['salata', 'salatalar', 'salad'];
 
 // Warm container global state
 let cachedOrders = [];
@@ -189,6 +190,12 @@ function isPizzaProduct(p) {
   return PIZZA_KEYWORDS.some(k => cat.includes(k) || name.includes(k));
 }
 
+function isSaladProduct(p) {
+  const cat = normalizeTurkish(p.categoryName || '');
+  const name = normalizeTurkish(p.productName || '');
+  return SALAD_KEYWORDS.some(k => cat.includes(k) || name.includes(k));
+}
+
 function formatOrder(order) {
   if (!order) return null;
   if (order.isBreadRequest) {
@@ -215,6 +222,7 @@ function formatOrder(order) {
 
   const allProducts = [];
   const pizzaProducts = [];
+  const saladProducts = [];
 
   for (const p of order.products) {
     const pid = String(p.id);
@@ -222,6 +230,7 @@ function formatOrder(order) {
     const catName = p.categoryName || 'Genel';
     const qty = parseInt(p.quantity || 1, 10);
     const isPizza = isPizzaProduct(p);
+    const isSalad = !isPizza && isSaladProduct(p);
     const isReady = readyProductIds.has(pid);
 
     const notes = [];
@@ -257,6 +266,7 @@ function formatOrder(order) {
       name: pname,
       category: catName,
       isPizza,
+      isSalad,
       qty,
       note: notes.length > 0 ? notes.join(' • ') : null,
       isReady
@@ -265,6 +275,8 @@ function formatOrder(order) {
     allProducts.push(item);
     if (isPizza) {
       pizzaProducts.push(item);
+    } else if (isSalad) {
+      saladProducts.push(item);
     }
   }
 
@@ -331,7 +343,8 @@ function formatOrder(order) {
     secondsElapsed: elapsed,
     orderNote: fullOrderNote,
     products: allProducts, // Servis ekranı için TÜM ürünler (içecek, salata, tatlı dahil)
-    pizzas: pizzaProducts,  // Mutfak ekranı için YALNIZCA pizzalar
+    pizzas: pizzaProducts,  // Mutfak ekranı için pizzalar
+    salads: saladProducts,  // Mutfak ekranı için salatalar (ince turuncu transparan görünüm)
     pizzaCount: totalPizzas,
     readyPizzaCount: readyPizzas,
     allPizzasReady,
