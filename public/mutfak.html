@@ -356,7 +356,7 @@
           if (o.isBreadRequest) return `bread_${o.id}_${o.tableName}`;
           const readySig = (o.pizzas || []).map(p => `${p.id}:${p.isReady ? 1 : 0}:${p.note || ''}`).join(',');
           const saladSig = (o.salads || []).map(s => `${s.id}:${s.isReady ? 1 : 0}:${s.note || ''}`).join(',');
-          return `${o.id}_${readySig}_${saladSig}_${o.orderNote || ''}`;
+          return `${o.id}_${o.tableName || ''}_${readySig}_${saladSig}_${o.orderNote || ''}`;
         }).join('|');
     }
 

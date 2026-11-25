@@ -219,7 +219,7 @@
     function computeOrdersSignature(ordersList) {
       return ordersList.map(o => {
         const pSig = (o.products || []).map(p => `${p.id}:${p.isReady ? 1 : 0}`).join(',');
-        return `${o.id}_${pSig}`;
+        return `${o.id}_${o.tableName || ''}_${pSig}`;
       }).join('|');
     }
 

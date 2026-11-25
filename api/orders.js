@@ -597,6 +597,9 @@ module.exports = async function handler(req, res) {
           continue;
         }
 
+        const existingOrder = cachedOrders.find(o => o.id === orderId);
+        const webhookTableName = incoming.tableName;
+
         // Eğer webhook gövdesinde ürün detayları yoksa tekil API ile anında çek
         if (!Array.isArray(incoming.products) || incoming.products.length === 0) {
           const fullOrder = await fetchOrderById(orderId);
@@ -605,10 +608,24 @@ module.exports = async function handler(req, res) {
           }
         }
 
+        // Adisyo /Order/{id} endpoint'i tableName'i null dönebildiği için mevcut/webhook masa adını koru
+        if (!incoming.tableName) {
+          incoming.tableName = webhookTableName || existingOrder?.tableName || null;
+        }
+
+        // Eğer masa adı hâlâ null ise ve 25 sn kota uygunsa /RecentOrders'dan gerçek masa adını al
+        if (!incoming.tableName && (Date.now() - getLastAdisyoCallTime() >= 25000)) {
+          await fetchFromAdisyo(false);
+          const refreshed = cachedOrders.find(o => o.id === orderId);
+          if (refreshed && refreshed.tableName) {
+            incoming.tableName = refreshed.tableName;
+          }
+        }
+
         // Kuyruğu güncelle veya sol başa yeni sipariş olarak ekle
         const idx = cachedOrders.findIndex(o => o.id === orderId);
         if (idx >= 0) {
-          cachedOrders[idx] = incoming;
+          cachedOrders[idx] = { ...cachedOrders[idx], ...incoming, tableName: incoming.tableName || cachedOrders[idx].tableName };
         } else {
           cachedOrders.unshift(incoming);
         }
