@@ -592,7 +592,12 @@
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          orders = parsed.filter(o => getOrderSeconds(o) < 10800);
+          orders = parsed.filter(o => {
+            if (getOrderSeconds(o) >= 10800) return false;
+            if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
+            if (kitchenDismissedOrders.has(Number(o.id)) || kitchenDismissedOrders.has(String(o.id))) return false;
+            return true;
+          });
           if (orders.length > 0) renderOrders();
           else localStorage.setItem('deli_mutfak_orders', JSON.stringify([]));
         }
@@ -676,13 +681,14 @@
         try {
           localStorage.setItem('deli_mutfak_orders', JSON.stringify(serverOrders));
         } catch (e) {}
-      } else if (consecutiveZeroCount >= 10 && data.lastSyncSuccess) {
+      } else if (data.lastSyncSuccess) {
         try {
           localStorage.setItem('deli_mutfak_orders', JSON.stringify([]));
         } catch (e) {}
       }
 
       const currentIds = new Set(serverOrders.map(o => o.id));
+      const rawServerIds = new Set(rawServerOrders.map(o => Number(o.id)));
 
       let hasNewOrder = false;
       serverOrders.forEach(so => {
@@ -701,14 +707,18 @@
         }
       });
 
-      // Adisyo'da tamamen kapanmış masaları mutfak dismiss hafızasından da temizle (ekmek talepleri hariç)
-      if (currentIds.size > 0) {
+      // Adisyo'da tamamen kapanmış masaları mutfak dismiss hafızasından temizle
+      // DİKKAT: Filtrelenmiş currentIds DEĞİL, ham sunucu listesi (rawServerIds) kullanılır!
+      // Böylece Servis ekranında hâlâ açık duran ama mutfakta ✕ ile kapatılmış adisyonlar ASLA geri gelmez.
+      if (data.lastSyncSuccess && data.hasSyncedWithAdisyo) {
+        const preparedSet = new Set(Array.isArray(data.preparedOrderIds) ? data.preparedOrderIds.map(Number) : []);
         kitchenDismissedOrders.forEach(id => {
           if (typeof id === 'string' && id.startsWith('bread_')) {
             kitchenDismissedOrders.delete(id);
             return;
           }
-          if (!currentIds.has(Number(id)) && !currentIds.has(String(id))) {
+          const numId = Number(id);
+          if (!rawServerIds.has(numId) && !preparedSet.has(numId)) {
             kitchenDismissedOrders.delete(id);
           }
         });
