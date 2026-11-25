@@ -208,6 +208,37 @@
       return 2;
     }
 
+    function getQtyBadgeClass(item, isReady) {
+      if (isReady) {
+        return 'bg-emerald-100 text-emerald-800 border border-emerald-300 line-through';
+      }
+      const group = getProductGroup(item);
+      if (group === 3) {
+        // İçecekler: Turuncu
+        return 'bg-orange-500 text-white border border-orange-600 shadow-2xs';
+      }
+      const cat = (item.category || '').toLowerCase();
+      const name = (item.name || '').toLowerCase();
+      if (group !== 1) {
+        if (item.isSalad || cat.includes('salat') || name.includes('salat')) {
+          // Salatalar: Mor
+          return 'bg-purple-600 text-white border border-purple-700 shadow-2xs';
+        }
+        if (
+          cat.includes('tatl') || cat.includes('dessert') ||
+          name.includes('tatl') || name.includes('tiramisu') ||
+          name.includes('cheesecake') || name.includes('sufle') ||
+          name.includes('panna') || name.includes('cannoli') ||
+          name.includes('brownie') || name.includes('dondurma')
+        ) {
+          // Tatlılar: Koyu Yeşil
+          return 'bg-emerald-800 text-white border border-emerald-900 shadow-2xs';
+        }
+      }
+      // Pizzalar ve diğer ürünler: Standart sarı
+      return 'bg-amber-100 text-amber-900 border border-amber-300';
+    }
+
     // Adisyon Çok Fazla Ürün İçerip Kendine Ayrılan 1 Slota Sığmıyor mu?
     // Kullanıcı kuralı: Kendine ayrılan alana sığmıyorsa (örn 9-10 ürün),
     // bulunduğu sütunda tek kalsın (row-span-2) ve bir altına adisyon gelmesin!
@@ -533,11 +564,7 @@
                     
                     <!-- SOL: ADET VE ÜRÜN ADI (FONT BÜYÜTÜLDÜ, KATEGORİ YOK, ASLA 2 SATIR OLMAZ) -->
                     <div class="flex items-center gap-2 flex-1 min-w-0">
-                      <span class="text-xs md:text-sm font-black px-2 py-0.5 rounded flex-shrink-0 leading-none ${
-                        isReady 
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 line-through' 
-                          : 'bg-amber-100 text-amber-900 border border-amber-300'
-                      }">
+                      <span class="text-xs md:text-sm font-black px-2 py-0.5 rounded flex-shrink-0 leading-none ${getQtyBadgeClass(item, isReady)}">
                         ${item.qty}x
                       </span>
 
