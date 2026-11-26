@@ -281,8 +281,10 @@
       return dinnerBellBuffer;
     }
 
-    function playDinnerBell() {
-      if (!soundEnabled) return;
+    const bellMp3Audio = new Audio('/zil.mp3');
+    bellMp3Audio.preload = 'auto';
+
+    function playSynthDinnerBell() {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
@@ -305,7 +307,20 @@
         gain.connect(ctx.destination);
         src.start();
       } catch (e) {
-        console.warn('Bell audio error:', e);
+        console.warn('Synth bell audio error:', e);
+      }
+    }
+
+    function playDinnerBell() {
+      if (!soundEnabled) return;
+      try {
+        bellMp3Audio.currentTime = 0;
+        const p = bellMp3Audio.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(() => playSynthDinnerBell());
+        }
+      } catch (e) {
+        playSynthDinnerBell();
       }
     }
 
