@@ -135,13 +135,19 @@
     const kitchenDismissedOrders = new Set();
     const dismissedBreadSet = new Set();
 
-    // Mutfak ekranında kapatılan adisyonları hafızadan yükle (normal adisyonlar)
+    function getOrderDismissKey(order) {
+      if (!order) return '';
+      return String(order.dismissKey || order.id);
+    }
+
+    // Mutfak ekranında kapatılan adisyonları hafızadan yükle (normal ve ek adisyonlar)
     try {
       const savedDismissed = localStorage.getItem('deli_mutfak_dismissed');
       if (savedDismissed) {
         JSON.parse(savedDismissed).forEach(id => {
-          const num = Number(id);
-          if (!isNaN(num)) kitchenDismissedOrders.add(num);
+          if (id != null && String(id).trim() && !String(id).startsWith('bread_')) {
+            kitchenDismissedOrders.add(String(id));
+          }
         });
       }
     } catch (e) {}
@@ -161,12 +167,15 @@
       }
 
       const numId = Number(orderId);
+      const closedOrder = orders.find(o => Number(o.id) === numId);
+      const dKey = closedOrder ? getOrderDismissKey(closedOrder) : String(orderId);
+
       const card = document.getElementById(`order-card-${orderId}`);
       if (card) {
         card.classList.add('order-exit');
       }
 
-      kitchenDismissedOrders.add(numId);
+      kitchenDismissedOrders.add(dKey);
       try {
         localStorage.setItem('deli_mutfak_dismissed', JSON.stringify([...kitchenDismissedOrders]));
       } catch (e) {}
@@ -350,13 +359,13 @@
       return ordersList
         .filter(o => {
           if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
-          return !kitchenDismissedOrders.has(Number(o.id)) && !kitchenDismissedOrders.has(String(o.id));
+          return !kitchenDismissedOrders.has(getOrderDismissKey(o));
         })
         .map(o => {
           if (o.isBreadRequest) return `bread_${o.id}_${o.tableName}`;
           const readySig = (o.pizzas || []).map(p => `${p.id}:${p.isReady ? 1 : 0}:${p.note || ''}`).join(',');
           const saladSig = (o.salads || []).map(s => `${s.id}:${s.isReady ? 1 : 0}:${s.note || ''}`).join(',');
-          return `${o.id}_${o.tableName || ''}_${readySig}_${saladSig}_${o.orderNote || ''}`;
+          return `${o.id}_${o.dismissKey || ''}_${o.tableName || ''}_${readySig}_${saladSig}_${o.orderNote || ''}`;
         }).join('|');
     }
 
@@ -371,7 +380,7 @@
       // SADECE İÇİNDE PİZZA, SALATA VEYA EKMEK TALEBİ OLAN VE MUTFAKTA KAPATILMAMIŞ ADİSYONLARI MUTFAK EKRANINA BAS
       const kitchenOrders = orders.filter(o => {
         if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
-        if (kitchenDismissedOrders.has(Number(o.id)) || kitchenDismissedOrders.has(String(o.id))) return false;
+        if (kitchenDismissedOrders.has(getOrderDismissKey(o))) return false;
         return (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0) || (o.salads && o.salads.length > 0));
       });
 
@@ -488,6 +497,7 @@
                   <h2 class="text-base md:text-lg font-black text-slate-950 tracking-tight leading-none truncate max-w-[130px]" title="${order.tableName}">
                     ${order.tableName}
                   </h2>
+                  ${order.isAddition ? '<span class="text-base md:text-lg font-black text-rose-600 leading-none">EK</span>' : ''}
                   <span class="text-xs md:text-sm font-bold text-slate-500">
                     #${order.orderNumber}
                   </span>
@@ -645,7 +655,7 @@
           orders = parsed.filter(o => {
             if (getOrderSeconds(o) >= 10800) return false;
             if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
-            if (kitchenDismissedOrders.has(Number(o.id)) || kitchenDismissedOrders.has(String(o.id))) return false;
+            if (kitchenDismissedOrders.has(getOrderDismissKey(o))) return false;
             return true;
           });
           if (orders.length > 0) renderOrders();
@@ -662,9 +672,9 @@
       if (Array.isArray(data.preparedOrderIds)) {
         let preparedChanged = false;
         data.preparedOrderIds.forEach(id => {
-          const numId = Number(id);
-          if (!isNaN(numId) && !kitchenDismissedOrders.has(numId)) {
-            kitchenDismissedOrders.add(numId);
+          const sId = String(id);
+          if (sId && !kitchenDismissedOrders.has(sId)) {
+            kitchenDismissedOrders.add(sId);
             preparedChanged = true;
           }
         });
@@ -696,7 +706,7 @@
       const serverOrders = rawServerOrders.filter(o => {
         if (getOrderSeconds(o) >= 10800) return false;
         if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
-        if (kitchenDismissedOrders.has(Number(o.id)) || kitchenDismissedOrders.has(String(o.id))) return false;
+        if (kitchenDismissedOrders.has(getOrderDismissKey(o))) return false;
         return true;
       });
 
@@ -711,8 +721,7 @@
           const statusEl = document.getElementById('sync-status');
           if (statusEl) {
             const kitchenCount = orders.filter(o => 
-              !kitchenDismissedOrders.has(Number(o.id)) && 
-              !kitchenDismissedOrders.has(String(o.id)) && 
+              !kitchenDismissedOrders.has(getOrderDismissKey(o)) && 
               (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0) || (o.salads && o.salads.length > 0))
             ).length;
             if (kitchenCount > 0) {
@@ -738,7 +747,7 @@
       }
 
       const currentIds = new Set(serverOrders.map(o => o.id));
-      const rawServerIds = new Set(rawServerOrders.map(o => Number(o.id)));
+      const rawServerKeys = new Set(rawServerOrders.map(o => getOrderDismissKey(o)));
 
       let hasNewOrder = false;
       serverOrders.forEach(so => {
@@ -758,18 +767,17 @@
       });
 
       // Adisyo'da tamamen kapanmış masaları mutfak dismiss hafızasından temizle
-      // DİKKAT: Filtrelenmiş currentIds DEĞİL, ham sunucu listesi (rawServerIds) kullanılır!
-      // Böylece Servis ekranında hâlâ açık duran ama mutfakta ✕ ile kapatılmış adisyonlar ASLA geri gelmez.
+      // DİKKAT: Filtrelenmiş currentIds DEĞİL, ham sunucu listesi (rawServerKeys) kullanılır!
       if (data.lastSyncSuccess && data.hasSyncedWithAdisyo) {
-        const preparedSet = new Set(Array.isArray(data.preparedOrderIds) ? data.preparedOrderIds.map(Number) : []);
-        kitchenDismissedOrders.forEach(id => {
-          if (typeof id === 'string' && id.startsWith('bread_')) {
-            kitchenDismissedOrders.delete(id);
+        const preparedSet = new Set(Array.isArray(data.preparedOrderIds) ? data.preparedOrderIds.map(String) : []);
+        kitchenDismissedOrders.forEach(key => {
+          const sKey = String(key);
+          if (sKey.startsWith('bread_')) {
+            kitchenDismissedOrders.delete(key);
             return;
           }
-          const numId = Number(id);
-          if (!rawServerIds.has(numId) && !preparedSet.has(numId)) {
-            kitchenDismissedOrders.delete(id);
+          if (!rawServerKeys.has(sKey) && !preparedSet.has(sKey)) {
+            kitchenDismissedOrders.delete(key);
           }
         });
         try {
@@ -780,8 +788,7 @@
       const statusEl = document.getElementById('sync-status');
       if (statusEl) {
         const kitchenCount = serverOrders.filter(o => 
-          !kitchenDismissedOrders.has(Number(o.id)) && 
-          !kitchenDismissedOrders.has(String(o.id)) && 
+          !kitchenDismissedOrders.has(getOrderDismissKey(o)) && 
           (o.isBreadRequest || (o.pizzas && o.pizzas.length > 0) || (o.salads && o.salads.length > 0))
         ).length;
         const syncTime = data.lastSyncTime || 'Canlı';
@@ -793,8 +800,7 @@
       if (data.hasSyncedWithAdisyo === false && data.lastSyncSuccess === false) {
         const existingAdisyoOrders = orders.filter(o => 
           !o.isBreadRequest && 
-          !kitchenDismissedOrders.has(Number(o.id)) && 
-          !kitchenDismissedOrders.has(String(o.id))
+          !kitchenDismissedOrders.has(getOrderDismissKey(o))
         );
         if (existingAdisyoOrders.length > 0) {
           const serverIds = new Set(serverOrders.map(o => o.id));
@@ -808,7 +814,7 @@
 
       finalOrders = finalOrders.filter(o => {
         if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
-        if (kitchenDismissedOrders.has(Number(o.id)) || kitchenDismissedOrders.has(String(o.id))) return false;
+        if (kitchenDismissedOrders.has(getOrderDismissKey(o))) return false;
         return true;
       });
 

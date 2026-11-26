@@ -247,10 +247,15 @@
       return products.length > 4; // 4 üründen sonra (5+ ürün) uzun adisyon (row-span-2)
     }
 
+    function getOrderDismissKey(order) {
+      if (!order) return '';
+      return String(order.dismissKey || order.id);
+    }
+
     function computeOrdersSignature(ordersList) {
       return ordersList.map(o => {
         const pSig = (o.products || []).map(p => `${p.id}:${p.isReady ? 1 : 0}`).join(',');
-        return `${o.id}_${o.tableName || ''}_${pSig}`;
+        return `${o.id}_${o.dismissKey || ''}_${o.tableName || ''}_${pSig}`;
       }).join('|');
     }
 
@@ -343,6 +348,7 @@
 
       // Kapatılan adisyondaki ürünleri hazır hafızasından temizle
       const closedOrder = orders.find(o => o.id === orderId);
+      const dKey = closedOrder ? getOrderDismissKey(closedOrder) : String(orderId);
       if (closedOrder && Array.isArray(closedOrder.products)) {
         closedOrder.products.forEach(p => localReadySet.delete(String(p.id)));
         try {
@@ -350,7 +356,7 @@
         } catch (e) {}
       }
 
-      dismissedOrders.add(orderId);
+      dismissedOrders.add(dKey);
 
       setTimeout(() => {
         orders = orders.filter(o => o.id !== orderId);
@@ -365,7 +371,7 @@
         await fetch('/api/orders?action=mark-all-ready', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId })
+          body: JSON.stringify({ orderId, dismissKey: dKey })
         });
       } catch (e) {
         console.error('Mark all ready error:', e);
@@ -383,7 +389,7 @@
 
       const visibleOrders = orders.filter(o => {
         if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
-        return !dismissedOrders.has(o.id);
+        return !dismissedOrders.has(getOrderDismissKey(o));
       });
 
       // KURAL: En eski sipariş sol başta (FIFO), yeni gelenler sağa eklenir (Ekmek talepleri de aynı sıraya girer)
@@ -504,6 +510,7 @@
                   <h2 class="text-sm md:text-base font-black text-slate-900 tracking-tight leading-none truncate max-w-[130px]" title="${order.tableName}">
                     ${order.tableName}
                   </h2>
+                  ${order.isAddition ? '<span class="text-sm md:text-base font-black text-rose-600 leading-none">EK</span>' : ''}
                   <span class="text-xs font-bold text-slate-500">
                     #${order.orderNumber}
                   </span>
@@ -630,7 +637,7 @@
       if (!data) return;
 
       if (Array.isArray(data.preparedOrderIds)) {
-        data.preparedOrderIds.forEach(id => dismissedOrders.add(Number(id)));
+        data.preparedOrderIds.forEach(id => dismissedOrders.add(String(id)));
       }
 
       if (Array.isArray(data.dismissedBreadIds)) {
@@ -654,7 +661,7 @@
       const serverOrders = rawServerOrders.filter(o => {
         if (getOrderSeconds(o) >= 10800) return false;
         if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
-        if (dismissedOrders.has(Number(o.id)) || dismissedOrders.has(String(o.id))) return false;
+        if (dismissedOrders.has(getOrderDismissKey(o))) return false;
         return true;
       });
 
@@ -682,18 +689,20 @@
         try {
           localStorage.setItem('deli_servis_orders', JSON.stringify(serverOrders));
         } catch (e) {}
-      } else if (consecutiveZeroCount >= 10 && data.lastSyncSuccess) {
+      } else if (data.lastSyncSuccess) {
         try {
           localStorage.setItem('deli_servis_orders', JSON.stringify([]));
         } catch (e) {}
       }
 
       const currentIds = new Set(serverOrders.map(o => o.id));
+      const rawKeys = new Set(rawServerOrders.map(o => getOrderDismissKey(o)));
 
-      if (currentIds.size > 0) {
-        dismissedOrders.forEach(dismissedId => {
-          if (!currentIds.has(dismissedId)) {
-            dismissedOrders.delete(dismissedId);
+      if (data.lastSyncSuccess && data.hasSyncedWithAdisyo) {
+        const preparedSet = new Set(Array.isArray(data.preparedOrderIds) ? data.preparedOrderIds.map(String) : []);
+        dismissedOrders.forEach(dismissedKey => {
+          if (!rawKeys.has(dismissedKey) && !preparedSet.has(dismissedKey)) {
+            dismissedOrders.delete(dismissedKey);
           }
         });
         renderedCardIds.forEach(renderedId => {
@@ -747,7 +756,7 @@
 
       const statusEl = document.getElementById('sync-status');
       if (statusEl) {
-        const visibleCount = serverOrders.filter(o => !dismissedOrders.has(o.id)).length;
+        const visibleCount = serverOrders.filter(o => !dismissedOrders.has(getOrderDismissKey(o))).length;
         const syncTime = data.lastSyncTime || 'Canlı';
         statusEl.textContent = `Adisyo Canlı (${visibleCount} Masa • ${syncTime})`;
       }
@@ -755,7 +764,7 @@
       // KORUMA 4: KISMİ VERİ KORUMASI (SADECE sunucu Adisyo ile henüz HİÇ senkronize olmamışsa)
       let finalOrders = [...serverOrders];
       if (data.hasSyncedWithAdisyo === false && data.lastSyncSuccess === false) {
-        const existingAdisyoOrders = orders.filter(o => !o.isBreadRequest && !dismissedOrders.has(o.id));
+        const existingAdisyoOrders = orders.filter(o => !o.isBreadRequest && !dismissedOrders.has(getOrderDismissKey(o)));
         if (existingAdisyoOrders.length > 0) {
           const serverIds = new Set(serverOrders.map(o => o.id));
           existingAdisyoOrders.forEach(eo => {
@@ -768,7 +777,7 @@
 
       finalOrders = finalOrders.filter(o => {
         if (o.isBreadRequest && dismissedBreadSet.has(String(o.id))) return false;
-        if (dismissedOrders.has(Number(o.id)) || dismissedOrders.has(String(o.id))) return false;
+        if (dismissedOrders.has(getOrderDismissKey(o))) return false;
         return true;
       });
 

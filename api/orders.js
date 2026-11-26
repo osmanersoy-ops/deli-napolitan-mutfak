@@ -37,8 +37,9 @@ function loadPreparedOrders() {
       const arr = JSON.parse(fs.readFileSync(PREPARED_FILE, 'utf8'));
       if (Array.isArray(arr)) {
         arr.forEach(id => {
-          const num = Number(id);
-          if (!isNaN(num)) preparedOrderIds.add(num);
+          if (id != null && String(id).trim()) {
+            preparedOrderIds.add(String(id));
+          }
         });
       }
     }
@@ -196,6 +197,14 @@ function isSaladProduct(p) {
   return SALAD_KEYWORDS.some(k => cat.includes(k) || name.includes(k));
 }
 
+function parseAdisyoTime(str) {
+  if (!str) return 0;
+  let s = String(str);
+  if (!s.includes('+') && !s.includes('Z')) s += '+03:00';
+  const ts = new Date(s).getTime();
+  return isNaN(ts) ? 0 : ts;
+}
+
 function formatOrder(order) {
   if (!order) return null;
   if (order.isBreadRequest) {
@@ -206,25 +215,44 @@ function formatOrder(order) {
   const statusStr = normalizeTurkish(order.status || '');
   const statusId = order.statusId || 0;
 
-  // Hazırlandı (3), Kapandı (5), İptal veya preparedDate varsa mutfak ve servisten düşer
-  const isFinished = (
-    order.preparedDate != null ||
+  // Hazırlandı (3), Kapandı (5, 7) veya İptal ise mutfak ve servisten düşer
+  const isClosedOrReady = (
     statusId === 3 ||
     statusId === 5 ||
+    statusId === 7 ||
     statusStr.includes('hazırlandı') ||
     statusStr.includes('kapan') ||
     statusStr.includes('iptal')
   );
 
-  if (isFinished) {
+  if (isClosedOrReady) {
     return null;
+  }
+
+  let effectiveProducts = order.products;
+  let effectiveInsertDate = order.insertDate || new Date().toISOString();
+  let isAddition = false;
+  let additionTag = null;
+
+  // Eğer Adisyo'da daha önce Hazırlandı (preparedDate) işaretlenmişse:
+  // Sadece preparedDate'ten SONRA eklenen yeni ürünleri "EK" adisyon olarak ayır!
+  if (order.preparedDate != null) {
+    const preparedTs = parseAdisyoTime(order.preparedDate);
+    const postPreparedProducts = order.products.filter(p => parseAdisyoTime(p.insertDate) > preparedTs);
+    if (postPreparedProducts.length === 0) {
+      return null;
+    }
+    effectiveProducts = postPreparedProducts;
+    effectiveInsertDate = postPreparedProducts[0].insertDate || effectiveInsertDate;
+    isAddition = true;
+    additionTag = String(postPreparedProducts[0].id);
   }
 
   const allProducts = [];
   const pizzaProducts = [];
   const saladProducts = [];
 
-  for (const p of order.products) {
+  for (const p of effectiveProducts) {
     const pid = String(p.id);
     const pname = p.productName || 'Ürün';
     const catName = p.categoryName || 'Genel';
@@ -293,7 +321,7 @@ function formatOrder(order) {
     tableName = `Gel-Al #${order.orderNumber}`;
   }
 
-  const insertDate = order.insertDate || new Date().toISOString();
+  const insertDate = effectiveInsertDate;
   let elapsed = 0;
   try {
     let dateStr = insertDate;
@@ -338,6 +366,9 @@ function formatOrder(order) {
     orderNumber: order.orderNumber,
     orderType,
     tableName,
+    isAddition,
+    additionTag,
+    dismissKey: isAddition ? `${order.id}_add_${additionTag}` : String(order.id),
     waiterName: order.waiterName || '',
     insertDate,
     secondsElapsed: elapsed,
@@ -577,13 +608,14 @@ module.exports = async function handler(req, res) {
         const orderId = incoming.id || incoming.orderId;
         if (!orderId) continue;
 
-        // Sipariş hazırlandı veya kapandıysa kuyruktan derhal düşür
+        // Sipariş hazırlandı (3), kapandı (5, 7) veya iptal ise kuyruktan düşür
+        // NOT: preparedDate dolu ama statusId === 1 ise masaya ek ürün girilmiş olabilir; formatOrder ayırt eder.
         const statusStr = normalizeTurkish(incoming.status || '');
         const statusId = incoming.statusId || 0;
         const isFinished = (
-          incoming.preparedDate != null ||
           statusId === 3 ||
           statusId === 5 ||
+          statusId === 7 ||
           statusStr.includes('hazırlandı') ||
           statusStr.includes('kapan') ||
           statusStr.includes('iptal')
@@ -792,9 +824,10 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ success: true, orderId: oidStr, isBreadRequest: true, ...getOrdersPayload() });
     }
     const oid = Number(body.orderId);
+    const dKey = String(body.dismissKey || oid);
     if (oid) {
       loadPreparedOrders();
-      preparedOrderIds.add(oid);
+      preparedOrderIds.add(dKey);
       savePreparedOrders();
       isQuotaProtected = false;
       try {
